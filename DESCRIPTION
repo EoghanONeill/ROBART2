@@ -13,7 +13,8 @@ Imports:
   Rcpp,
   SoftBart,
   collapse,
-  MCMCpack
+  MCMCpack,
+  kit
 Remotes:
   EoghanONeill/LinConGauss
 License:
