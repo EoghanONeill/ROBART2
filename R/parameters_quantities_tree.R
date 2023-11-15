@@ -30,7 +30,7 @@ tree_full_conditional = function(tree, R, sigma2, sigma2_mu) {
   # sumRsq_j = aggregate(R, by = list(tree$node_indices), function(x) sum(x^2))[,2]
   # S_j = aggregate(R, by = list(tree$node_indices), sum)[,2]
 
-  sumRsq_j = fsum(R^2, tree$node_indices)
+  # sumRsq_j = fsum(R^2, tree$node_indices)
   S_j = fsum(R, tree$node_indices)
 
   # Now calculate the log posterior
