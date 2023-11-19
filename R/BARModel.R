@@ -631,7 +631,6 @@ interNtreesB <- function(inter_list){
 #' @import dbarts
 #' @import LinConGauss
 #' @import collapse
-#' @import kit
 #' @importFrom MCMCpack 'rdirichlet'
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{MT} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers and \eqn{T} time periods, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
@@ -713,7 +712,9 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                       nu = 3,
                                       lambda = 0.1,
                                       sparse = TRUE,
-                                      no_empty_proposals = FALSE){
+                                      no_empty_proposals = FALSE,
+                                      alpha_prior = FALSE,
+                                      sigma_mu_prior = FALSE){
 
 
   ######### set up things for myBART implementation ####################
@@ -1219,7 +1220,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
     # can be replaced by something else
-    sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees))^2)
+    # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees))^2)
+    sigma2_mu <- ((max(as.vector(Z.mat))-min(as.vector(Z.mat)))/(2 * k * sqrt(n.trees)))^2
 
 
     # Create a list of trees for the initial stump
@@ -3465,14 +3467,22 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
     # sigma2 = update_sigma2(sum_of_squares, n = length(y_scale), nu, lambda)
     # variance kept equal to 1, do not update
 
-    # Update s = (s_1, ..., s_p), where s_p is the probability that predictor p is used to create new terminal nodes
-    if (sparse == 'TRUE' & i > floor(iter.max*0.1)){
-      s = update_s(var_count, ncol(Zlag.mat), 1)
+    # # Update s = (s_1, ..., s_p), where s_p is the probability that predictor p is used to create new terminal nodes
+    # if (sparse == 'TRUE' & i > floor(iter.max*0.1)){
+    #   s = update_s(var_count, ncol(Zlag.mat), 1)
+    # }
+
+    # Update s = (s_1, ..., s_p), where s_p is the probability that predictor q in 1:p is used to create new terminal nodes
+    if (sparse & i > floor(iter.max * 0.25)) {
+      s <- update_s(var_count, p, alpha_s)
+      if(alpha_prior){
+        alpha_s <- update_alpha_par(s, alpha_scale, alpha_a, alpha_b)
+      }
     }
 
-
-
-
+    if(sigma_mu_prior){
+      sigma2_mu <-  update_sigma_mu_par(curr_trees, sigma2_mu)
+    }
 
 
     ##################### Store iteration output ##################################################
@@ -6108,7 +6118,9 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                         nu = 3,
                                         lambda = 0.1,
                                         sparse = TRUE,
-                                        no_empty_proposals = FALSE){
+                                        no_empty_proposals = FALSE,
+                                        alpha_prior = FALSE,
+                                        sigma_mu_prior = FALSE){
 
 
   ######### set up things for myBART implementation ####################
@@ -6686,7 +6698,8 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     # maybe (max(as.vector(Z.mat))-min(as.vector(Z.mat)))
     # can be replaced by something else
-    sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees))^2)
+    # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees))^2)
+    sigma2_mu <- ((max(as.vector(Z.mat))-min(as.vector(Z.mat)))/(2 * k * sqrt(n.trees)))^2
 
 
     # Create a list of trees for the initial stump
@@ -9180,10 +9193,26 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
     # sigma2 = update_sigma2(sum_of_squares, n = length(y_scale), nu, lambda)
     # variance kept equal to 1, do not update
 
-    # Update s = (s_1, ..., s_p), where s_p is the probability that predictor p is used to create new terminal nodes
-    if (sparse == 'TRUE' & i > floor(iter.max*0.1)){
-      s = update_s(var_count, ncol(Xmat.train.no.y), 1)
+    # # Update s = (s_1, ..., s_p), where s_p is the probability that predictor p is used to create new terminal nodes
+    # if (sparse == 'TRUE' & i > floor(iter.max*0.1)){
+    #   s = update_s(var_count, ncol(Xmat.train.no.y), 1)
+    # }
+
+
+    # Update s = (s_1, ..., s_p), where s_p is the probability that predictor q in 1:p is used to create new terminal nodes
+    if (sparse & i > floor(iter.max * 0.25)) {
+      s <- update_s(var_count, p, alpha_s)
+      if(alpha_prior){
+        alpha_s <- update_alpha_par(s, alpha_scale, alpha_a, alpha_b)
+      }
     }
+
+    if(sigma_mu_prior){
+      sigma2_mu <-  update_sigma_mu_par(curr_trees, sigma2_mu)
+    }
+
+
+
 
     ##################### Store iteration output ##################################################
 

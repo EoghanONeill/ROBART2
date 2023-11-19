@@ -140,3 +140,72 @@ sample_move = function(curr_tree, i, nburn){
   }
   return(type)
 }
+
+
+
+update_alpha_par <- function(s, alpha_scale, alpha_a, alpha_b) {
+
+  # create inputs for likelihood
+
+  log_s <- log(s)
+  mean_log_s <- mean(log_s)
+  p <- length(s)
+  # alpha_scale   # denoted by lambda_a in JRSSB paper
+
+  rho_grid <- (1:999)/1000
+
+  alpha_grid <- alpha_scale * rho_grid / (1 - rho_grid )
+
+  logfullconds <- alpha_grid * mean_log_s +
+    lgamma(alpha_grid) -
+    p*lgamma(alpha_grid/p) +
+    dbeta(x = rho_grid, shape1 = alpha_a, shape2 = alpha_b, ncp = 0, log = TRUE)
+
+  max_ll <- max(logliks)
+  logsumexps <- max_ll + log(sum(exp( logfullconds  -  max_ll )))
+
+
+
+  logfullconds <- exp(logfullconds - logsumexps)
+
+  rho_ind <- sample.int(999,size = 1, prob = logfullconds)
+
+
+  return(alpha_grid[rho_ind])
+}
+
+
+update_sigma_mu_par <- function(trees, curr_sigmu2) {
+
+  num_trees <- length(trees)
+  mu_vec <- c()
+  for(m in 1:length(trees)){
+    mu_vec <- c(mu_vec,
+                trees[[m]]$tree_matrix[, 'mu'])
+
+  }
+
+  mu_vec <- na.omit(mu_vec)
+
+  # note Linero and Yang's sigma_mu corresponds to
+  # num_trees times sigma_mu as defined in this package
+  curr_s_mu <- sqrt(curr_sigmu2)
+
+  prop_s_mu_minus2 <- rgamma(n = 1,
+                             shape = length(mu_vec)/2,
+                             rate = sum(mu_vec^2)/2)
+
+  prop_s_mu <- sqrt(1/prop_s_mu_minus2)
+
+  acceptprob <- (dcauchy(prop_s_mu, 0, 0.25/sqrt(num_trees))/dcauchy(curr_s_mu, 0, 0.25/sqrt(num_trees)))*
+    (prop_s_mu/curr_s_mu)^3
+
+  if(runif(1) < acceptprob){
+    new_s_mu <- prop_s_mu
+  }else{
+    new_s_mu <- curr_s_mu
+  }
+
+  return(new_s_mu^2)
+}
+
