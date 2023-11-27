@@ -1196,6 +1196,12 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
     tree_fits_store = matrix(0, ncol = n.trees, nrow = length(as.vector(Z.mat)))
     s = rep(1/ncol(Zlag.mat), ncol(Zlag.mat))
 
+    p <- ncol(Zlag.mat)
+    rho <- p # For DART
+
+    alpha_s <- 1 # p
+
+    alpha_scale <- p
 
     ###### new myBART initialization ######################
 
@@ -3354,8 +3360,9 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
       current_partial_residuals = as.vector(Z.mat) - mu + tree_fits_store[,j]
 
       # Propose a new tree via grow/change/prune/swap
-      type = sample_move(curr_trees[[j]], iter, 100 # nburn # no burnin number, so setting to 100, maybe this is not optimal
-                         )
+      type = sample_move(curr_trees[[j]], iter, 0, # nburn # no burnin number, so setting to 100, maybe this is not optimal
+                         trans_prob)
+
 
 
       # option: edit the proposal step so that any proposed tree does not contain empty nodes?
@@ -6123,6 +6130,9 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                         sigma_mu_prior = FALSE){
 
 
+  X.train <- as.matrix(X.train)
+  X.test <- as.matrix(X.test)
+
   ######### set up things for myBART implementation ####################
 
   # Extract control parameters
@@ -6674,6 +6684,13 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
     tree_fits_store = matrix(0, ncol = n.trees, nrow = length(as.vector(Z.mat)))
     s = rep(1/ncol(Xmat.train.no.y), ncol(Xmat.train.no.y))
 
+
+    p <- ncol(Xmat.train.no.y)
+    rho <- p # For DART
+
+    alpha_s <- 1 # p
+
+    alpha_scale <- p
 
     ###### new myBART initialization ######################
 
@@ -9080,8 +9097,8 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
       current_partial_residuals = as.vector(Z.mat) - mu + tree_fits_store[,j]
 
       # Propose a new tree via grow/change/prune/swap
-      type = sample_move(curr_trees[[j]], iter, 100 # nburn # no burnin number, so setting to 100, maybe this is not optimal
-      )
+      type = sample_move(curr_trees[[j]], iter, 0, # nburn # no burnin number, so setting to 100, maybe this is not optimal
+                         trans_prob)
 
 
       # option: edit the proposal step so that any proposed tree does not contain empty nodes?

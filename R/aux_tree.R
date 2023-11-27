@@ -131,16 +131,15 @@ get_number_distinct_cov <- function(tree){
   return(num_distinct_cov)
 }
 
-sample_move = function(curr_tree, i, nburn){
+sample_move = function(curr_tree, i, nburn, trans_prob){
 
   if (nrow(curr_tree$tree_matrix) == 1 || i < max(floor(0.1*nburn), 10)) {
     type = 'grow'
   } else {
-    type = sample(c('grow', 'prune', 'change'), 1)
+    type = sample(c('grow', 'prune', 'change'),  1, prob = trans_prob)
   }
   return(type)
 }
-
 
 
 update_alpha_par <- function(s, alpha_scale, alpha_a, alpha_b) {

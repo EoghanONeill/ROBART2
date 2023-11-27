@@ -54,7 +54,8 @@ simulate_mu = function(tree, R, sigma2, sigma2_mu) {
 
   # Get sum of residuals in each terminal node
   # sumR = aggregate(R, by = list(tree$node_indices), sum)[,2]
-  sumR = fsum(R, tree$node_indices, sum)
+
+  sumR = fsum(R, tree$node_indices)
 
   # Now calculate mu values
   mu = rnorm(length(nj) ,

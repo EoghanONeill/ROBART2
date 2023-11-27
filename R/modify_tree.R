@@ -100,11 +100,33 @@ noempty_update_tree = function(y, # Target variable
 
   empty_nodes <- terminal_nodes[which(terminal_node_size ==0)]
 
+
+  # first will prune all pairs of terminal nodes, then will try to remove other empty nodes
+
+  empty_prunable_nodes <- c()
+
+  for(node_ind in empty_nodes){
+    # find node and sibling rows
+    sibling_pair <- which(curr_tree$tree_matrix[, 'parent'] == curr_tree$tree_matrix[node_ind, 'parent'] )
+    # find size of both nodes
+    # pair_sizes <- curr_tree$tree_matrix[sibling_pair,'node_size']
+    # find terminal status
+    pair_terminal <- curr_tree$tree_matrix[sibling_pair,'terminal']
+
+    # if both empty or both terminal, then can prune
+    if( all(pair_terminal==1)){
+      empty_prunable_nodes <- c(empty_prunable_nodes, node_ind)
+    }
+  }
+
+
+
   vars_empty_pruned <- c()
 
-  while(length(empty_nodes >0)){
+  # while(length(empty_nodes >0)){
+  while(length(empty_prunable_nodes >0)){
 
-    parents_temp <- curr_tree$tree_matrix[empty_nodes, 'parent' ]
+    parents_temp <- curr_tree$tree_matrix[empty_prunable_nodes, 'parent' ]
 
     # nodes_to_delete <- unique(as.vector(curr_tree$tree_matrix[parents_temp, c('child_left','child_right') ]))
     # curr_tree <- curr_tree$tree_matrix[-nodes_to_delete,, drop = FALSE]
@@ -114,15 +136,29 @@ noempty_update_tree = function(y, # Target variable
     children_mat <- curr_tree$tree_matrix[parents_temp, c('child_left','child_right'), drop=FALSE ]
 
 
+    # issue: some empty terminal nodes have non-terminal sibling node.
+
+
     vars_empty_pruned <- c(vars_empty_pruned,
                            curr_tree$tree_matrix[parents_temp, 'split_variable', drop=FALSE ])
 
-    for(node_to_prune in parents_temp){
+    for(prune_ind in 1:length(parents_temp)){
+      node_to_prune <- parents_temp[prune_ind]
+      var_pruned_nodes = curr_tree$tree_matrix[node_to_prune, 'split_variable']
 
-      curr_tree$tree_matrix = curr_tree$tree_matrix[-children_mat[node_to_prune,],,
+      deleted_nodes <- children_mat[prune_ind,]
+      curr_tree$tree_matrix = curr_tree$tree_matrix[-deleted_nodes,,
                                                   drop = FALSE]
+
+
+      children_mat[children_mat >= deleted_nodes[1] ] <- children_mat[children_mat >= deleted_nodes[1] ] - 2
+
+      parents_temp[parents_temp >= deleted_nodes[1]] <- parents_temp[parents_temp >= deleted_nodes[1]] - 2
+
+
+
       # Make this node terminal again with no children or split values
-      curr_tree$tree_matrix[parent_pick,c('terminal',
+      curr_tree$tree_matrix[node_to_prune,c('terminal',
                                          'child_left',
                                          'child_right',
                                          'split_variable',
@@ -162,7 +198,26 @@ noempty_update_tree = function(y, # Target variable
     terminal_node_size = as.numeric(curr_tree$tree_matrix[terminal_nodes,'node_size'])
 
     empty_nodes <- terminal_nodes[which(terminal_node_size ==0)]
+
+    empty_prunable_nodes <- c()
+
+    for(node_ind in empty_nodes){
+      # find node and sibling rows
+      sibling_pair <- which(curr_tree$tree_matrix[, 'parent'] == curr_tree$tree_matrix[node_ind, 'parent'] )
+      # find size of both nodes
+      pair_sizes <- curr_tree$tree_matrix[sibling_pair,'node_size']
+
+      if(all(pair_sizes ==0 )){
+        empty_prunable_nodes <- c(empty_prunable_nodes, node_ind)
+      }
+    }
+
   }
+
+  # start at deepest empty nodes, the sibling of any remaining terminal node
+  # must be non-terminal
+  # can remove entire branch resulting from sibling
+  # or just remove split and shift up all of sibling branch
 
 
 
@@ -219,8 +274,13 @@ grow_tree = function(X, y, curr_tree, node_min_size, s) {
   # Find terminal node sizes
   terminal_node_size = as.numeric(new_tree$tree_matrix[terminal_nodes,'node_size'])
 
+  if (all(terminal_node_size < 2 * node_min_size)) {
+    curr_tree$var <- 0
+    return(curr_tree)
+  }
+
   available_values = NULL
-  max_bad_trees = 10
+  max_bad_trees = 50
   count_bad_trees = 0
   bad_trees = TRUE
 
@@ -236,23 +296,112 @@ grow_tree = function(X, y, curr_tree, node_min_size, s) {
 
     # Choose a random terminal node to split
     node_to_split = sample(terminal_nodes, 1,
-                           prob = as.integer(terminal_node_size > node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
+                           prob = as.integer(terminal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
 
     # Choose a split variable uniformly from all columns (the first one is the intercept)
     split_variable = sample(1:ncol(X), 1, prob = s)
 
-    # Alternatively follow BARTMachine and choose a split value using sample on the internal values of the available
-    available_values = sort(unique(X[new_tree$node_indices == node_to_split,
-                                     split_variable]))
+    # # Alternatively follow BARTMachine and choose a split value using sample on the internal values of the available
+    # available_values = sort(unique(X[new_tree$node_indices == node_to_split,
+    #                                  split_variable]))
+    #
+    # if(length(available_values) == 1){
+    #   split_value = available_values[1]
+    # } else if (length(available_values) == 2){
+    #   split_value = available_values[2]
+    # }  else {
+    #   # split_value = sample(available_values[-c(1,length(available_values))], 1)
+    #   split_value = resample(available_values[-c(1,length(available_values))])
+    # }
+
+    countout <- collapse::fcount(X[curr_tree$node_indices == node_to_split, split_variable], sort = TRUE)
+    available_values <- countout$x
+
 
     if(length(available_values) == 1){
-      split_value = available_values[1]
+      # no point in splitting if only one value
+      count_bad_trees = count_bad_trees + 1
+      if(count_bad_trees >= max_bad_trees) {
+        # print(" reached max_bad_trees = ")
+
+        curr_tree$var = 0
+        return(curr_tree)
+      }else{
+        next
+      }
+
+      # new_split_value = available_values[1]
     } else if (length(available_values) == 2){
-      split_value = available_values[2]
+
+      if(any(countout$N < node_min_size)){
+        count_bad_trees = count_bad_trees + 1
+        if(count_bad_trees >= max_bad_trees) {
+          # print(" reached max_bad_trees = ")
+
+          curr_tree$var = 0
+          return(curr_tree)
+        }else{
+          next
+        }
+      }
+
+      # new_split_value = available_values[2]
+      split_value = runif(1,available_values[1],available_values[2])
+
+
     }  else {
+
+      # find smallest and largest split values with less than minimum node size left and right
+      runsum <- 0
+      # min_ind <- 0
+      for(val_ind in 1:length(available_values)){
+        runsum <- runsum + countout$N[val_ind]
+        if(runsum >= node_min_size){
+          min_ind <- val_ind +1
+          break
+        }
+      }
+      runsum <- 0
+      # max_ind <- 0
+      for(val_ind in length(available_values):1){
+        runsum <- runsum + countout$N[val_ind]
+        if(runsum >= node_min_size){
+          max_ind <- val_ind
+          break
+        }
+      }
+
+      if((min_ind > length(available_values)) | max_ind == 0  ){
+        count_bad_trees = count_bad_trees + 1
+        if(count_bad_trees >= max_bad_trees) {
+          # print(" reached max_bad_trees = ")
+
+          curr_tree$var = 0
+          return(curr_tree)
+        }else{
+          next
+        }
+      }
+
+      if(min_ind > max_ind){
+        print("countout = ")
+        print(countout)
+        stop("min_ind > max_ind")
+      }
+
+      if(min_ind == max_ind){
+        split_value <- available_values[min_ind]
+      }else{
+        # new_split_value <- sample(available_values[min_ind:max_ind],1)
+        split_value = runif(1,available_values[min_ind],available_values[max_ind])
+      }
       # split_value = sample(available_values[-c(1,length(available_values))], 1)
-      split_value = resample(available_values[-c(1,length(available_values))])
+      # split_value = resample(available_values[-c(1,length(available_values))])
+      # new_split_value = sample(available_values[-c(1)],1)
+      # split_value = resample(available_values[-c(1,length(available_values))])
+      # split_value = runif(1,available_values[2],available_values[length(available_values)])
     }
+
 
     curr_parent = new_tree$tree_matrix[node_to_split, 'parent'] # Make sure to keep the current parent in there. Will be NA if at the root node
     new_tree$tree_matrix[node_to_split,1:6] = c(0, # Now not temrinal
@@ -397,7 +546,7 @@ change_tree = function(X, y, curr_tree, node_min_size) {
 
   # Create a while loop to get good trees
   # Create a counter to stop after a certain number of bad trees
-  max_bad_trees = 2
+  max_bad_trees = 50
   count_bad_trees = 0
   bad_trees = TRUE
   while(bad_trees) {
@@ -423,19 +572,106 @@ change_tree = function(X, y, curr_tree, node_min_size) {
 
     new_split_variable = sample(1:ncol(X), 1)
 
-    available_values = sort(unique(X[use_node_indices,
-                                     new_split_variable]))
+    # available_values = sort(unique(X[use_node_indices,
+    #                                  new_split_variable]))
+    #
+    # if (length(available_values) == 1){
+    #   new_split_value = available_values[1]
+    #   new_tree$var = c(var_changed_node, new_split_variable)
+    # } else if (length(available_values) == 2){
+    #   new_split_value = available_values[2]
+    #   new_tree$var = c(var_changed_node, new_split_variable)
+    # } else {
+    #   # new_split_value = sample(available_values[-c(1,length(available_values))], 1)
+    #   new_split_value = resample(available_values[-c(1,length(available_values))])
+    # }
 
-    if (length(available_values) == 1){
-      new_split_value = available_values[1]
-      new_tree$var = c(var_changed_node, new_split_variable)
+
+    countout <- collapse::fcount(X[use_node_indices, new_split_variable], sort = TRUE)
+    available_values <- countout$x
+
+
+    if(length(available_values) == 1){
+      # no point in splitting if only one value
+      count_bad_trees = count_bad_trees + 1
+      if(count_bad_trees >= max_bad_trees) {
+        # print(" reached max_bad_trees = ")
+
+        curr_tree$var <- c(0, 0)
+        return(curr_tree)
+      }else{
+        next
+      }
+
+      # new_split_value = available_values[1]
     } else if (length(available_values) == 2){
-      new_split_value = available_values[2]
-      new_tree$var = c(var_changed_node, new_split_variable)
-    } else {
-      # new_split_value = sample(available_values[-c(1,length(available_values))], 1)
-      new_split_value = resample(available_values[-c(1,length(available_values))])
+
+      if(any(countout$N < node_min_size)){
+        n_bad_trees = n_bad_trees + 1
+        if(n_bad_trees >= max_bad_trees) {
+          # print(" reached max_bad_trees = ")
+
+          curr_tree$var <- c(0, 0)
+          return(curr_tree)
+        }else{
+          next
+        }
+      }
+
+      # new_split_value = available_values[2]
+      new_split_value = runif(1,available_values[1],available_values[2])
+
+    }  else {
+
+      # find smallest and largest split values with less than minimum node size left and right
+      runsum <- 0
+      # min_ind <- 0
+      for(val_ind in 1:length(available_values)){
+        runsum <- runsum + countout$N[val_ind]
+        if(runsum >= node_min_size){
+          min_ind <- val_ind +1
+          break
+        }
+      }
+      runsum <- 0
+      # max_ind <- 0
+      for(val_ind in length(available_values):1){
+        runsum <- runsum + countout$N[val_ind]
+        if(runsum >= node_min_size){
+          max_ind <- val_ind
+          break
+        }
+      }
+
+      if((min_ind > length(available_values)) | max_ind == 0  ){
+        count_bad_trees = count_bad_trees + 1
+        if(count_bad_trees >= max_bad_trees) {
+          # print(" reached max_bad_trees = ")
+
+          curr_tree$var <- c(0, 0)
+          return(curr_tree)
+        }else{
+          next
+        }
+      }
+
+      if(min_ind > max_ind){
+        stop("min_ind > max_ind")
+      }
+
+      if(min_ind == max_ind){
+        new_split_value <- available_values[min_ind]
+      }else{
+        # new_split_value <- sample(available_values[min_ind:max_ind],1)
+        new_split_value = runif(1,available_values[min_ind],available_values[max_ind])
+      }
+      # split_value = sample(available_values[-c(1,length(available_values))], 1)
+      # split_value = resample(available_values[-c(1,length(available_values))])
+      # new_split_value = sample(available_values[-c(1)],1)
+      # split_value = resample(available_values[-c(1,length(available_values))])
+      # split_value = runif(1,available_values[2],available_values[length(available_values)])
     }
+
     # Update the tree details
     new_tree$tree_matrix[node_to_change,
                          c('split_variable',

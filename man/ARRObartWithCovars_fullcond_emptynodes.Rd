@@ -48,7 +48,9 @@ ARRObartWithCovars_fullcond_emptynodes(
   nu = 3,
   lambda = 0.1,
   sparse = TRUE,
-  no_empty_proposals = FALSE
+  no_empty_proposals = FALSE,
+  alpha_prior = FALSE,
+  sigma_mu_prior = FALSE
 )
 }
 \arguments{
