@@ -20,18 +20,37 @@ tree_full_conditional = function(tree, R, sigma2, sigma2_mu) {
   # Need to calculate log complete conditional, involves a sum over terminal nodes
 
   # First find which rows are terminal nodes
-  # which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
+  which_terminal = which(tree$tree_matrix[,'terminal'] == 1)
 
   # Get node sizes for each terminal node
-  # nj = tree$tree_matrix[which_terminal,'node_size']
-  nj = tree$tree_matrix[tree$tree_matrix[,'terminal'] == 1,'node_size']
+  nj = tree$tree_matrix[which_terminal,'node_size']
+  # nj = tree$tree_matrix[tree$tree_matrix[,'terminal'] == 1,'node_size']
 
+  # nj <- nj[nj!=0]
   # Get sum of residuals and sum of residuals squared within each terminal node
   # sumRsq_j = aggregate(R, by = list(tree$node_indices), function(x) sum(x^2))[,2]
   # S_j = aggregate(R, by = list(tree$node_indices), sum)[,2]
 
   # sumRsq_j = fsum(R^2, tree$node_indices)
-  S_j = fsum(R, tree$node_indices)
+  # S_j = fsum(R, tree$node_indices)
+  S_j = fsum(R,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+  if(length(S_j) != length(nj)){
+    print("S_j = ")
+    print(S_j)
+
+    print("nj = ")
+    print(nj)
+
+    print("tree$node_indices = ")
+    print(tree$node_indices)
+
+    print("tree$tree_matrix = ")
+    print(tree$tree_matrix)
+
+    # print("n_j = ")
+    # print(n_j)
+  }
 
   # Now calculate the log posterior
   log_post = 0.5 * ( sum(log( sigma2 / (nj*sigma2_mu + sigma2))) +
@@ -51,11 +70,16 @@ simulate_mu = function(tree, R, sigma2, sigma2_mu) {
 
   # Get node sizes for each terminal node
   nj = tree$tree_matrix[which_terminal,'node_size']
-
+  # nj <- nj[nj!=0]
   # Get sum of residuals in each terminal node
   # sumR = aggregate(R, by = list(tree$node_indices), sum)[,2]
 
-  sumR = fsum(R, tree$node_indices)
+  # sumR = fsum(R, tree$node_indices)
+
+  sumR = fsum(R,factor(tree$node_indices, levels = which_terminal ), fill = TRUE)
+
+
+
 
   # Now calculate mu values
   mu = rnorm(length(nj) ,

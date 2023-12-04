@@ -126,7 +126,7 @@ noempty_update_tree = function(y, # Target variable
   # while(length(empty_nodes >0)){
   while(length(empty_prunable_nodes >0)){
 
-    parents_temp <- curr_tree$tree_matrix[empty_prunable_nodes, 'parent' ]
+    parents_temp <- unique(curr_tree$tree_matrix[empty_prunable_nodes, 'parent' ])
 
     # nodes_to_delete <- unique(as.vector(curr_tree$tree_matrix[parents_temp, c('child_left','child_right') ]))
     # curr_tree <- curr_tree$tree_matrix[-nodes_to_delete,, drop = FALSE]
@@ -172,7 +172,8 @@ noempty_update_tree = function(y, # Target variable
         # If we've removed some nodes from the middle we need to re-number all the child_left and child_right values - the parent values will still be correct
         if(node_to_prune <= nrow(curr_tree$tree_matrix)) { # Only need do this if we've removed some observations from the middle of the tree matrix
           # If you're pruning any nodes which affect parent indices further down the tree then make sure to shift the parent values
-          bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=node_to_prune)
+          # bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=node_to_prune)
+          bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=deleted_nodes[1])
           # Shift them back because you have removed two rows
           curr_tree$tree_matrix[bad_parents,'parent'] = as.numeric(curr_tree$tree_matrix[bad_parents,'parent']) - 2
 
@@ -182,6 +183,16 @@ noempty_update_tree = function(y, # Target variable
             # Find both the children of this node
             curr_children = which(as.numeric(curr_tree$tree_matrix[,'parent']) == curr_parent)
             # Input these children back into the parent
+            if(length(curr_children) != 2){
+              print("curr_parent = ")
+              print(curr_parent)
+              print("curr_tree$tree_matrix = ")
+              print(curr_tree$tree_matrix)
+
+              print("curr_children = ")
+              print(curr_children)
+            }
+
             curr_tree$tree_matrix[curr_parent,c('child_left','child_right')] = sort(curr_children)
           } # End for loop of correcting parents and children
         } # End if statement to fill in tree details

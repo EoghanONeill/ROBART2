@@ -21,6 +21,7 @@ ARRObartWithCovars_fullcond_emptynodes(
   n.burn = 0L,
   n.samples = 1L,
   n.thin = 1L,
+  trans_prob = c(2.5, 2.5, 4)/9,
   n.chains = 1,
   n.threads = 1L,
   printEvery = 100L,
