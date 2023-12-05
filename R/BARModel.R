@@ -715,8 +715,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                       sparse = TRUE,
                                       no_empty_proposals = FALSE,
                                       alpha_prior = FALSE,
-                                      sigma_mu_prior = FALSE){
+                                      sigma_mu_prior = FALSE,
+                                      splitting_rules = "discrete"){
 
+
+  if(!(splitting_rules %in% c("discrete", "continuous"))){
+    stop("splitting_rules must be 'discrete' or 'continuous'.")
+  }
 
   ######### set up things for myBART implementation ####################
 
@@ -3377,7 +3382,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                      type = type,
                                      curr_tree = curr_trees[[j]],
                                      node_min_size = node_min_size,
-                                     s = s)
+                                     s = s,
+                                     splitting_rules = splitting_rules)
 
       }else{
         new_trees[[j]] = update_tree(y = as.vector(Z.mat),
@@ -3385,7 +3391,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                      type = type,
                                      curr_tree = curr_trees[[j]],
                                      node_min_size = node_min_size,
-                                     s = s)
+                                     s = s,
+                                     splitting_rules = splitting_rules)
 
       }
 
@@ -6129,8 +6136,13 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                         sparse = TRUE,
                                         no_empty_proposals = FALSE,
                                         alpha_prior = FALSE,
-                                        sigma_mu_prior = FALSE){
+                                        sigma_mu_prior = FALSE,
+                                        splitting_rules = "discrete"){
 
+
+  if(!(splitting_rules %in% c("discrete", "continuous"))){
+    stop("splitting_rules must be 'discrete' or 'continuous'.")
+  }
 
   X.train <- as.matrix(X.train)
   X.test <- as.matrix(X.test)
@@ -9114,7 +9126,8 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                              type = type,
                                              curr_tree = curr_trees[[j]],
                                              node_min_size = node_min_size,
-                                             s = s)
+                                             s = s,
+                                             splitting_rules = splitting_rules)
 
       }else{
         new_trees[[j]] = update_tree(y = as.vector(Z.mat),
@@ -9122,7 +9135,8 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                      type = type,
                                      curr_tree = curr_trees[[j]],
                                      node_min_size = node_min_size,
-                                     s = s)
+                                     s = s,
+                                     splitting_rules = splitting_rules)
 
       }
 
