@@ -646,8 +646,8 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules) {
       if (length(available_values) == 2){
 
         if(any(countout$N < node_min_size)){
-          n_bad_trees = n_bad_trees + 1
-          if(n_bad_trees >= max_bad_trees) {
+          count_bad_trees = count_bad_trees + 1
+          if(count_bad_trees >= max_bad_trees) {
             # print(" reached max_bad_trees = ")
 
             curr_tree$var <- c(0, 0)
