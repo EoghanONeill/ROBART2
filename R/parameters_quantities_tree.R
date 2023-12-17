@@ -195,13 +195,13 @@ update_z = function(y, prediction){
   }
 
   # These functions calculate the grow and prune ratios respectively according to the Bart Machine/ soft BART papers
-  ratio_grow = function(new_tree, cur_tree){
-    grow_ratio = get_nterminal(cur_tree)/(get_w(new_tree)+1)
+  ratio_grow = function(new_tree, curr_tree){
+    grow_ratio = get_nterminal(curr_tree)/(get_w(new_tree)) # (get_w(new_tree)+1)
 
     return(as.numeric(grow_ratio))
   }
 
-  ratio_prune = function(new_tree, cur_tree){
-    prune_ratio = get_w(new_tree)/(get_nterminal(cur_tree)-1)
+  ratio_prune = function(new_tree, curr_tree){
+    prune_ratio = get_w(curr_tree)/(get_nterminal(curr_tree)-1) #(get_nterminal(curr_tree)-1)
     return(as.numeric(prune_ratio))
   }

@@ -57,11 +57,15 @@ mybart2dbart_tree <- function(mybarttree,
 }
 
 
-#' @export
-fastnormdens <- function(x, mean = 0, sd = 0){
-  (1/(sd*sqrt(2*pi)))*exp(-0.5*((x-mean)/sd)^2)
-}
+#' #' @export
+#' fastnormdens <- function(x, mean = 0, sd = 0){
+#'   (1/(sd*sqrt(2*pi)))*exp(-0.5*((x-mean)/sd)^2)
+#' }
 
+#' @export
+fastlognormdens <- function(x, mean = 0, sd = 0){
+  -log(sd*sqrt(2*pi)) + (-0.5*((x-mean)/sd)^2)
+}
 
 
 rebuildTree2 <- function(tree) {
@@ -901,8 +905,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
       # 1 corresponding to "lowest rank". i.e. lowest utility item
 
-      up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
-
+      # up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
+      up.order = -rowSums( pair.comp, na.rm = TRUE ) + n.item
 
       ranks_mat[, (t-1)*n.ranker + indiv] <- up.order
 
@@ -988,9 +992,17 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
       # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
       # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+      # ranks_mat[,j] <-
+      #   Z.mat[,j]
+
+      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <-
+        (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
 
 
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <-
+      #   qnorm(c(n.item : 1)/(n.item+1)) +
+      #   rnorm(n = 1, mean = 0, sd = 0.01) # add some noise to prevent splitting issues
+      # # if separate noise for each item, then would need to preserve ranks
 
       # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
       # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
@@ -1022,6 +1034,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     for(t in 1:num_lags){
       init_Z_t0 <- rep(0, t*n.item*n.ranker)
+      # init_Z_t0 <- rnorm(n =  t*n.item*n.ranker, mean = 0, sd = 0.005) #maybe add some noise to avoid splitting issues?
       # init_Z_t0 <- rnorm(t*n.item*n.ranker)
 
       Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
@@ -1235,6 +1248,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
     # sigma2_mu <- (max(as.vector(Z.mat))-min(as.vector(Z.mat)))/((2 * k * sqrt(n.trees))^2)
     sigma2_mu <- ((max(as.vector(Z.mat))-min(as.vector(Z.mat)))/(2 * k * sqrt(n.trees)))^2
 
+    # sigma2_mu <- 1/n.trees
 
     # Create a list of trees for the initial stump
     curr_trees = create_stump(num_trees = n.trees,
@@ -1662,7 +1676,11 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
           # let rows be period zero, and columns be period 1 (2?)
 
-          probmattemp <- matrix(0,
+          # probmattemp <- matrix(0,
+          #                       nrow = num_regions,
+          #                       ncol = num_regions)
+
+          logprobmattemp <- matrix(0,
                                 nrow = num_regions,
                                 ncol = num_regions)
 
@@ -1683,35 +1701,35 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
 
-          belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
-
-          #max of latent variables for j ranked below i in t+1
-          # Z.mat
-
-          if(length(belowrank_ind) ==0){
-            temp_lower <- -Inf
-          }else{
-            # Check that this is the period t+1 latent variable value, not period t
-            temp_lower <- as.vector(Z.mat)[1*n.item*n.ranker+
-                                             n.item*(indiv - 1) +
-                                             belowrank_ind]
-          }
-
-          # inds for j ranked above i in t+1
-
-          aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
-
-          #min of latent variables for j ranked below i in period t+1
-
-          if(length(aboverank_ind) ==0){
-            temp_upper <- Inf
-          }else{
-            # Check that this is the period t+1 latent variable value, not period t
-
-            temp_upper <- as.vector(Z.mat)[1*n.item*n.ranker+
-                                             n.item*(indiv - 1) +
-                                             aboverank_ind]
-          }
+          # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in t+1
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower <- -Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #   temp_lower <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in t+1
+          #
+          # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period t+1
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper <- Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #
+          #   temp_upper <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    aboverank_ind]
+          # }
 
 
           temp_ztp1 <- as.vector(Z.mat)[1*n.item*n.ranker+
@@ -1780,9 +1798,14 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
           # tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
           tempmeanfordens <- intersectmat[1:num_regions, 1]
 
-          temp_tnorm_probvec <- fastnormdens(temp_ztp1,
-                                             mean = tempmeanfordens,
-                                             sd = 1)
+          # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+          #                                    mean = tempmeanfordens,
+          #                                    sd = 1)
+
+          temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
+                                                mean = tempmeanfordens,
+                                                sd = 1)
+
 
 
 
@@ -1808,7 +1831,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             #                          mean = temp_mean,
             #                          sd = 1)
 
-            temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+            # temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+            temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
 
             # temp_mean <- intersectmat[k_ind, 1]
 
@@ -1853,7 +1877,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
               # these three lines are technically unnecessary
-              probmattemp[, k_ind] <- rep(0,num_regions)
+              # probmattemp[, k_ind] <- rep(0,num_regions)
+              logprobmattemp[, k_ind] <- rep(-Inf,num_regions)
               tempbounds[k_ind, 1] <- NA
               tempbounds[k_ind, 2] <- NA
 
@@ -1920,7 +1945,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               print("k_ind = ")
               print(k_ind)
 
-              stop(all( intersectmat[,4] == 0 ))
+              stop("all( intersectmat[,4] == 0 )")
 
             }
 
@@ -1939,32 +1964,33 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               #   temp_tnorm_prob *
               #   intersectmat[k0_ind,4]
 
-              probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+              # probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+              logprobmattemp[k0_ind, k_ind] <- temp_tnorm_logprob + log(intersectmat[k0_ind,4])
 
-              if(probmattemp[k0_ind, k_ind] < 0){
-                print("probmattemp[k0_ind, k_ind] = ")
-                print(probmattemp[k0_ind, k_ind])
-
-                # print("prob_t_region = ")
-                # print(prob_t_region)
-
-                print("temp_tnorm_prob = ")
-                print(temp_tnorm_prob)
-
-                print("intersectmat[k0_ind,4] = ")
-                print(intersectmat[k0_ind,4])
-
-                print("temp_upper2 = ")
-                print(temp_upper2)
-
-                print("temp_lower2 = ")
-                print(temp_lower2)
-
-                print("temp_mean2 = ")
-                print(temp_mean2)
-
-
-              }
+              # if(probmattemp[k0_ind, k_ind] < 0){
+              #   print("probmattemp[k0_ind, k_ind] = ")
+              #   print(probmattemp[k0_ind, k_ind])
+              #
+              #   # print("prob_t_region = ")
+              #   # print(prob_t_region)
+              #
+              #   print("temp_tnorm_prob = ")
+              #   print(temp_tnorm_prob)
+              #
+              #   print("intersectmat[k0_ind,4] = ")
+              #   print(intersectmat[k0_ind,4])
+              #
+              #   print("temp_upper2 = ")
+              #   print(temp_upper2)
+              #
+              #   print("temp_lower2 = ")
+              #   print(temp_lower2)
+              #
+              #   print("temp_mean2 = ")
+              #   print(temp_mean2)
+              #
+              #
+              # }
 
 
             } # end loop over k0
@@ -1986,7 +2012,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
           # print("Line 1621 before sample")
 
-          if(all(probmattemp ==0)){
+          # if(all(probmattemp ==0)){
+          if(all(logprobmattemp == -Inf)){
 
             print("iter = ")
             print(iter)
@@ -2002,11 +2029,24 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             stop("line 1880 all(probmattemp ==0)")
           }
 
+
+
+
+          # region_ind <- sample.int((num_regions^2),
+          #                          size = 1,
+          #                          replace = TRUE,
+          #                          prob = as.vector(probmattemp))
+
+
+          logprobstemp <- as.vector(logprobmattemp)
+          max_ll <- max(logprobstemp)
+          logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+          probstemp <- exp(logprobstemp - logsumexps)
+
           region_ind <- sample.int((num_regions^2),
                                    size = 1,
                                    replace = TRUE,
-                                   prob = as.vector(probmattemp))
-
+                                   prob = probstemp)
 
           # print("Line 1629 after sample")
 
@@ -2146,10 +2186,9 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
           for(t in 2:(n.time - 1)){
 
-            temp_ztpmin1 <- as.vector(Z.mat)[(t-2)*n.item*n.ranker+
+            temp_ztpmin1 <- as.vector(Z.mat)[(t-2)*n.item*n.ranker +
                                                n.item*(indiv - 1) +
                                                item_ind]
-
 
             if(is.na(temp_ztpmin1)){
 
@@ -2166,11 +2205,6 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
               print("item_ind = ")
               print(item_ind)
-
-
-
-
-
 
               stop("NA temp_ztpmin1")
             }
@@ -2230,7 +2264,12 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             # first column is the probabilities
             # second column is the lower bounds
             # third column is the upper bounds
-            temp_region_probs <- matrix(0,
+            # temp_region_probs <- matrix(0,
+            #                             nrow = nrow(intersectmat),
+            #                             ncol = 3)
+
+
+            temp_region_logprobs <- matrix(-Inf,
                                         nrow = nrow(intersectmat),
                                         ncol = 3)
 
@@ -2242,35 +2281,35 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
             # inds for j ranked below i in t+1
 
-            belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
-
-            #max of latent variables for j ranked below i in t+1
-            # Z.mat
-
-            if(length(belowrank_ind) ==0){
-              temp_lower <- -Inf
-            }else{
-              # Check that this is the period t+1 latent variable value, not period t
-              temp_lower <- as.vector(Z.mat)[t*n.item*n.ranker+
-                                               n.item*(indiv - 1) +
-                                               belowrank_ind]
-            }
-
-            # inds for j ranked above i in t+1
-
-            aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
-
-            #min of latent variables for j ranked below i in period t+1
-
-            if(length(aboverank_ind) ==0){
-              temp_upper <- Inf
-            }else{
-              # Check that this is the period t+1 latent variable value, not period t
-
-              temp_upper <- as.vector(Z.mat)[t*n.item*n.ranker+
-                                               n.item*(indiv - 1) +
-                                               aboverank_ind]
-            }
+            # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t+1
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower <- -Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #   temp_lower <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t+1
+            #
+            # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t+1
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper <- Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #
+            #   temp_upper <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    aboverank_ind]
+            # }
 
 
             # want trunc norm probability of latent variable value for item_ind
@@ -2380,11 +2419,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             # tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
             tempmeanfordens <- intersectmat[1:num_regions, 1]
 
-            temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            #                                    mean = tempmeanfordens,
+            #                                    sd = 1)
+
+            temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
                                                mean = tempmeanfordens,
                                                sd = 1)
-
-
 
 
 
@@ -2409,7 +2450,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               #                          mean = temp_mean,
               #                          sd = 1)
 
-              temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+              # temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+              temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
 
               # Probability of z_t in intersection of
               # region k_ind (for period t+1)
@@ -2453,9 +2495,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                 # print("nrow(temp_region_probs) = ")
                 # print(nrow(temp_region_probs))
 
-                temp_region_probs[k_ind, 1] <- 0
-                temp_region_probs[k_ind, 2] <- NA
-                temp_region_probs[k_ind, 3] <- NA
+                # temp_region_probs[k_ind, 1] <- 0
+                # temp_region_probs[k_ind, 2] <- NA
+                # temp_region_probs[k_ind, 3] <- NA
+
+                temp_region_logprobs[k_ind, 1] <- -Inf
+                temp_region_logprobs[k_ind, 2] <- NA
+                temp_region_logprobs[k_ind, 3] <- NA
 
 
                 next
@@ -2478,6 +2524,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                 print("item_ind = ")
                 print(item_ind)
 
+                print("t = ")
+                print(t)
+
+                print("indiv = ")
+                print(indiv)
+
+
                 print("rankvec_t = ")
                 print(rankvec_t)
 
@@ -2487,6 +2540,25 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
                 print("temp_upper2 = ")
                 print(temp_upper2)
+
+                print("temp_lower3 = ")
+                print(temp_lower3)
+
+                print("temp_upper3 = ")
+                print(temp_upper3)
+
+
+
+                print("intersectmat[k_ind, 2] = ")
+                print(intersectmat[k_ind, 2])
+
+                print("intersectmat[k_ind, 3] = ")
+                print(intersectmat[k_ind, 3])
+
+                print("k_ind = ")
+                print(k_ind)
+
+
 
                 stop("Line 1917. temp_lower2 >= temp_upper2")
               }
@@ -2514,7 +2586,24 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               # print(temp_tnorm_prob)
 
               # prob_t_region <- prob_t_region*temp_tnorm_prob
-              prob_t_region <- temp_tnorm_prob
+              # prob_t_region <- temp_tnorm_prob
+              logprob_t_region <- temp_tnorm_logprob
+
+              # if(temp_tnorm_prob ==0){
+              if(temp_tnorm_logprob == -Inf){
+                  print("temp_tnorm_prob = ")
+                  print(temp_tnorm_prob)
+
+                  print("temp_tnorm_probvec =")
+                  print(temp_tnorm_probvec)
+
+                  print("tempmeanfordens =")
+                  print(tempmeanfordens)
+
+                  print("temp_ztp1 =")
+                  print(temp_ztp1)
+
+              }
 
               # save region probability
 
@@ -2525,10 +2614,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               # print("prob_t_region = ")
               # print(prob_t_region)
 
-              temp_region_probs[k_ind, 1] <- prob_t_region
-              temp_region_probs[k_ind, 2] <- temp_lower2
-              temp_region_probs[k_ind, 3] <- temp_upper2
+              # temp_region_probs[k_ind, 1] <- prob_t_region
+              # temp_region_probs[k_ind, 2] <- temp_lower2
+              # temp_region_probs[k_ind, 3] <- temp_upper2
 
+              temp_region_logprobs[k_ind, 1] <- logprob_t_region
+              temp_region_logprobs[k_ind, 2] <- temp_lower2
+              temp_region_logprobs[k_ind, 3] <- temp_upper2
 
             }
 
@@ -2537,7 +2629,55 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
             # print("Line 1903 before sample")
 
-            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+            # if(sum(temp_region_probs[,1] > 0) ==0){
+            if(sum(temp_region_logprobs[,1] > -Inf) ==0){
+
+              print("temp_tnorm_probvec =")
+              print(temp_tnorm_probvec)
+
+
+              print("intersectmat = ")
+              print(intersectmat)
+
+              print("temp_region_probs = ")
+              print(temp_region_probs)
+
+              print("item_ind = ")
+              print(item_ind)
+
+              print("t = ")
+              print(t)
+
+              print("indiv = ")
+              print(indiv)
+
+              print("rankvec_t = ")
+              print(rankvec_t)
+
+              print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+
+              print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                       n.item*(indiv - 1) +
+                                       1:n.item])
+
+              stop(" Line 2590 sum(temp_region_probs[,1] >0) == 0")
+            }
+
+
+
+            # region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+            logprobstemp <- as.vector(temp_region_logprobs[,1])
+            max_ll <- max(logprobstemp)
+            logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+            probstemp <- exp(logprobstemp - logsumexps)
+
+            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = probstemp)
+
+
 
             # temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
 
@@ -2600,15 +2740,27 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             # }
 
 
-            tempbuffer <- (temp_region_probs[region_ind, 3] - temp_region_probs[region_ind, 2])/50
+            # tempbuffer <- (temp_region_probs[region_ind, 3] - temp_region_probs[region_ind, 2])/50
+            #
+            # if( (temp_region_probs[region_ind, 3] != Inf) & (temp_region_probs[region_ind, 2] != -Inf)){
+            #   upper_buffered <- temp_region_probs[region_ind, 3] - tempbuffer
+            #   lower_buffered <- temp_region_probs[region_ind, 2] + tempbuffer
+            #
+            # }else{
+            #   upper_buffered <- temp_region_probs[region_ind, 3]
+            #   lower_buffered <- temp_region_probs[region_ind, 2]
+            #
+            # }
 
-            if( (temp_region_probs[region_ind, 3] != Inf) & (temp_region_probs[region_ind, 2] != -Inf)){
-              upper_buffered <- temp_region_probs[region_ind, 3] - tempbuffer
-              lower_buffered <- temp_region_probs[region_ind, 2] + tempbuffer
+            tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/50
+
+            if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
+              upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
+              lower_buffered <- temp_region_logprobs[region_ind, 2] + tempbuffer
 
             }else{
-              upper_buffered <- temp_region_probs[region_ind, 3]
-              lower_buffered <- temp_region_probs[region_ind, 2]
+              upper_buffered <- temp_region_logprobs[region_ind, 3]
+              lower_buffered <- temp_region_logprobs[region_ind, 2]
 
             }
 
@@ -2757,7 +2909,6 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
           if(length(aboverank_ind) ==0){
             temp_upper3 <- Inf
           }else{
-
             temp_upper3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
                                               n.item*(indiv - 1) +
                                               aboverank_ind]
@@ -3432,6 +3583,61 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
       }
 
       vars_empty_pruned <- c()
+
+      if(is.na(a)){
+        print("current_partial_residuals = ")
+        print(current_partial_residuals)
+
+        print("get_tree_prior(new_trees[[j]], alpha, beta) = ")
+        print(get_tree_prior(new_trees[[j]], alpha, beta))
+
+        print("get_tree_prior(curr_trees[[j]], alpha, beta) = ")
+        print(get_tree_prior(curr_trees[[j]], alpha, beta))
+
+        print("tree_full_conditional(new_trees[[j]],
+                                    current_partial_residuals,
+                                    sigma2,
+                                    sigma2_mu) = ")
+        print(tree_full_conditional(new_trees[[j]],
+                                    current_partial_residuals,
+                                    sigma2,
+                                    sigma2_mu))
+
+        print("tree_full_conditional(curr_trees[[j]],
+                                    current_partial_residuals,
+                                    sigma2,
+                                    sigma2_mu)  = ")
+        print(tree_full_conditional(curr_trees[[j]],
+                                    current_partial_residuals,
+                                    sigma2,
+                                    sigma2_mu) )
+
+        print("new_trees[[j]] = ")
+        print(new_trees[[j]])
+        print("curr_trees[[j]] = ")
+        print(curr_trees[[j]])
+
+        print("l_new = ")
+        print(l_new)
+
+        print("l_old = ")
+        print(l_old)
+
+        print("ratio_prune(new_trees[[j]], curr_trees[[j]]) = ")
+        print(ratio_prune(new_trees[[j]], curr_trees[[j]]))
+
+        print("ratio_grow(new_trees[[j]], curr_trees[[j]]) = ")
+        print(ratio_grow(new_trees[[j]], curr_trees[[j]]))
+
+        print("exp(l_new - l_old) = ")
+        print(exp(l_new - l_old))
+
+        print("type = ")
+        print(type)
+
+        print("is.na(a)")
+      }
+
 
       if(a > runif(1)) {
         curr_trees[[j]] = new_trees[[j]]

@@ -160,7 +160,7 @@ update_alpha_par <- function(s, alpha_scale, alpha_a, alpha_b) {
     p*lgamma(alpha_grid/p) +
     dbeta(x = rho_grid, shape1 = alpha_a, shape2 = alpha_b, ncp = 0, log = TRUE)
 
-  max_ll <- max(logliks)
+  max_ll <- max(logfullconds)
   logsumexps <- max_ll + log(sum(exp( logfullconds  -  max_ll )))
 
 
