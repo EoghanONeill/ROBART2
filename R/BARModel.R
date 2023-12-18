@@ -720,7 +720,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                  no_empty_proposals = FALSE,
                                                  alpha_prior = FALSE,
                                                  sigma_mu_prior = FALSE,
-                                                 splitting_rules = "discrete"){
+                                                 splitting_rules = "discrete",
+                                                 loop_order = "time_in_item"){
+
+
+  if(!(loop_order %in% c("time_in_item", "item_in_time"))){
+    stop("loop_order must be 'time_in_item' or 'item_in_time'.")
+  }
 
 
   if(!(splitting_rules %in% c("discrete", "continuous"))){
@@ -1003,6 +1009,10 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
         qnorm(c(n.item : 1)/(n.item+1)) +
         rnorm(n = 1, mean = 0, sd = 0.01) # add some noise to prevent splitting issues
       # if separate noise for each item, then would need to preserve ranks
+
+
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <-
+      #   Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j]/5
 
       # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
       # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
@@ -1536,6 +1546,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     list_inter_mats <- list()
 
+    emptynodecount <- 0
+
     for(i in 1:n.trees){
 
 
@@ -1566,6 +1578,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
       #                                   chainNums = 1,
       #                                   sampleNums = 1)
 
+      emptynodecount <- emptynodecount + sum(temptree[, 'node_size'] == 0)
 
       treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
 
@@ -1618,6 +1631,19 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
 
+
+    print(" emptynodecount = ")
+    print(emptynodecount)
+
+    if(nrow(intersectmat) > 500){
+
+      print("nrow(intersectmat) > 500")
+      print("intersectmat = ")
+      print(intersectmat)
+
+
+    }
+
     # print("Line 1150")
 
     # print("line 1478")
@@ -1644,8 +1670,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     # print("Line 1169")
 
-
-    for(z_iter_ind in 1:num_z_iters){
+    if(loop_order == "time_in_item"){
+      for(z_iter_ind in 1:num_z_iters){
 
 
       for(indiv in 1:n.ranker){
@@ -3028,6 +3054,1399 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
       } # end loop over individuals indiv in 1:n.ranker
 
     }
+    }else{ # loop over items and rankers within each time period
+      for(z_iter_ind in 1:num_z_iters){
+
+
+        for(indiv in 1:n.ranker){
+
+          # print("indiv = ")
+          # print(indiv)
+          ########### calculate qkt  ########################################
+
+          ########### calculate qkt   for t = 1 ########################################
+
+
+          ### calculate qkt integrals for time period t = 1  ################
+
+          # These integrals are already calculated and saved as intersectmat[ktemp,4]
+
+          for(item_ind in 1:n.item){
+
+
+            #QUESTION: LOOP OVER ITEMS THEN TIME OT TIME THEN ITEMS?
+
+            # loop over items
+
+            # Now loop over time periods
+
+            # special case for t=1
+
+            # probability matrix for sampling elements
+
+            # let rows be period zero, and columns be period 1 (2?)
+
+            # probmattemp <- matrix(0,
+            #                       nrow = num_regions,
+            #                       ncol = num_regions)
+
+            logprobmattemp <- matrix(0,
+                                     nrow = num_regions,
+                                     ncol = num_regions)
+
+            # loop over period 2 regions into which z_1 can fall
+
+
+            tempbounds <- matrix(NA,
+                                 nrow = num_regions,
+                                 ncol = 2)
+
+            # Trunc norm prob of next periods latent value conditional on region
+
+            # Create intervals from interval t+1 latent values
+
+            rankvec_tp1 <- ranks_mat[,  1*n.ranker + indiv]
+
+            # inds for j ranked below i in t+1
+
+
+
+            # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t+1
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower <- -Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #   temp_lower <- as.vector(Z.mat)[1*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t+1
+            #
+            # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t+1
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper <- Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #
+            #   temp_upper <- as.vector(Z.mat)[1*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    aboverank_ind]
+            # }
+
+
+            temp_ztp1 <- as.vector(Z.mat)[1*n.item*n.ranker+
+                                            n.item*(indiv - 1) +
+                                            item_ind]
+
+
+
+            rankvec_t <- ranks_mat[,  (1-1)*n.ranker + indiv]
+
+            # if(any(order(rankvec_t) !=
+            #    order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            #                           n.item*(indiv-1) +
+            #                           1:n.item])) ){
+            #
+            #   # print("order(rankvec_t) = ")
+            #   # print(order(rankvec_t))
+            #   #
+            #   # print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            #   #                         n.item*(indiv - 1) +
+            #   #                         1:n.item])  = ")
+            #
+            #   print(order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            #                                  n.item*(indiv - 1) +
+            #                                  1:n.item]) )
+            #
+            #   # print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            #   #                                n.item*(indiv - 1) +
+            #   #                                1:n.item] = ")
+            #
+            #   print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            #                            n.item*(indiv - 1) +
+            #                            1:n.item])
+            #
+            # }
+
+            # inds for j ranked below i in t
+
+            belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+
+            #max of latent variables for j ranked below i in t
+            # Z.mat
+
+            if(length(belowrank_ind) ==0){
+              temp_lower3 <- -Inf
+            }else{
+              temp_lower3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                                n.item*(indiv - 1) +
+                                                belowrank_ind]
+            }
+
+            # inds for j ranked above i in t
+
+            aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+
+            #min of latent variables for j ranked below i in period t
+
+            if(length(aboverank_ind) ==0){
+              temp_upper3 <- Inf
+            }else{
+              temp_upper3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                                n.item*(indiv - 1) +
+                                                aboverank_ind]
+            }
+
+            # tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+            tempmeanfordens <- intersectmat[1:num_regions, 1]
+
+            # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            #                                    mean = tempmeanfordens,
+            #                                    sd = 1)
+
+            temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
+                                                     mean = tempmeanfordens,
+                                                     sd = 1)
+
+
+
+
+            # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            #                                 mean = intersectmat[1:num_regions, 1],
+            #                                 sd = 1)
+
+            for(k_ind in 1:num_regions){
+              # obtain mean for truncated normal distribution
+              # temp_mean <- intersectmat[k_ind, 1]
+
+              # want trunc norm probability of latent variable value for item_ind
+              # in period t+1
+
+
+              # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+              #                               a=temp_lower,
+              #                               b=Inf,
+              #                               mean = temp_mean,
+              #                               sd = 1)
+
+              # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+              #                          mean = temp_mean,
+              #                          sd = 1)
+
+              # temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+              temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
+
+              # temp_mean <- intersectmat[k_ind, 1]
+
+
+
+              # now second term
+
+
+              temp_lower2 <- intersectmat[k_ind, 2]
+              temp_upper2 <- intersectmat[k_ind, 3]
+
+
+              # print(" line 1697 ")
+              #
+              # print("temp_lower2 = ")
+              # print(temp_lower2)
+              #
+              # print("temp_lower3 = ")
+              # print(temp_lower3)
+              #
+              # print("temp_upper2 = ")
+              # print(temp_upper2)
+              #
+              # print("temp_upper3 = ")
+              # print(temp_upper3)
+
+
+              if((temp_lower2 >= temp_upper3) | (temp_lower3 >= temp_upper2)){
+                # if((temp_lower2 - temp_upper3) > -0.001 | (temp_lower3 - temp_upper2 > -0.001)){
+                # intervals do not overlap, therefore assign probability zero
+                # and skip to next iteration
+
+
+                # print("k_ind = ")
+                # print(k_ind)
+
+                # print("ncol(temp_region_probs) = ")
+                # print(ncol(temp_region_probs))
+
+                # print("nrow(temp_region_probs) = ")
+                # print(nrow(temp_region_probs))
+
+
+                # these three lines are technically unnecessary
+                # probmattemp[, k_ind] <- rep(0,num_regions)
+                logprobmattemp[, k_ind] <- rep(-Inf,num_regions)
+                tempbounds[k_ind, 1] <- NA
+                tempbounds[k_ind, 2] <- NA
+
+                next
+
+              }
+
+
+              temp_lower2 <- max(temp_lower2, temp_lower3)
+              temp_upper2 <- min(temp_upper2, temp_upper3)
+
+              if(temp_lower2 >= temp_upper2){
+
+                print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+
+                print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                         n.item*(indiv - 1) +
+                                         1:n.item])
+
+                print("item_ind = ")
+                print(item_ind)
+
+                print("rankvec_t = ")
+                print(rankvec_t)
+
+                print("intersectmat = ")
+                print(intersectmat)
+
+                print("k_ind = ")
+                print(k_ind)
+
+                stop("Line 1763 temp_lower2 >= temp_upper2")
+              }
+
+              if(all( intersectmat[,4] == 0 ) |all( is.na(intersectmat[,4])  ) ){
+
+                print("(1-1)*n.item*n.ranker +
+                                       n.item*(indiv - 1) +
+                                       1:n.item] = ")
+
+                print((1-1)*n.item*n.ranker +
+                        n.item*(indiv - 1) +
+                        1:n.item)
+
+                print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+
+                print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                         n.item*(indiv - 1) +
+                                         1:n.item])
+
+                print("item_ind = ")
+                print(item_ind)
+
+                print("rankvec_t = ")
+                print(rankvec_t)
+
+                print("intersectmat = ")
+                print(intersectmat)
+
+                print("k_ind = ")
+                print(k_ind)
+
+                stop("all( intersectmat[,4] == 0 )")
+
+              }
+
+
+              for(k0_ind in 1:num_regions){
+
+                #loop over all possible means
+                temp_mean2 <- intersectmat[k0_ind,1]
+
+                # probability of being in intersection region
+
+                # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+                # probmattemp[k0_ind, k_ind] <- prob_t_region*
+                #   temp_tnorm_prob *
+                #   intersectmat[k0_ind,4]
+
+                # probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+                logprobmattemp[k0_ind, k_ind] <- temp_tnorm_logprob + log(intersectmat[k0_ind,4])
+
+                # if(probmattemp[k0_ind, k_ind] < 0){
+                #   print("probmattemp[k0_ind, k_ind] = ")
+                #   print(probmattemp[k0_ind, k_ind])
+                #
+                #   # print("prob_t_region = ")
+                #   # print(prob_t_region)
+                #
+                #   print("temp_tnorm_prob = ")
+                #   print(temp_tnorm_prob)
+                #
+                #   print("intersectmat[k0_ind,4] = ")
+                #   print(intersectmat[k0_ind,4])
+                #
+                #   print("temp_upper2 = ")
+                #   print(temp_upper2)
+                #
+                #   print("temp_lower2 = ")
+                #   print(temp_lower2)
+                #
+                #   print("temp_mean2 = ")
+                #   print(temp_mean2)
+                #
+                #
+                # }
+
+
+              } # end loop over k0
+
+              # save upper and lower bounds (mean saved in intersectmat)
+              # or just obtain again later
+
+              tempbounds[k_ind,1] <- temp_lower2
+              tempbounds[k_ind,2] <- temp_upper2
+
+
+            } # end loop over k1
+
+
+            #sample a combination of k0 and k1
+            # if necessary can use column sums to sample k1, then k0
+            # however, this is probably unnecessary
+
+
+            # print("Line 1621 before sample")
+
+            # if(all(probmattemp ==0)){
+            if(all(logprobmattemp == -Inf)){
+
+              print("iter = ")
+              print(iter)
+
+              print("tempbounds = ")
+              print(tempbounds)
+
+              print("intersectmat = ")
+              print(intersectmat)
+
+
+
+              stop("line 1880 all(probmattemp ==0)")
+            }
+
+
+
+
+            # region_ind <- sample.int((num_regions^2),
+            #                          size = 1,
+            #                          replace = TRUE,
+            #                          prob = as.vector(probmattemp))
+
+
+            logprobstemp <- as.vector(logprobmattemp)
+            max_ll <- max(logprobstemp)
+            logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+            probstemp <- exp(logprobstemp - logsumexps)
+
+            region_ind <- sample.int((num_regions^2),
+                                     size = 1,
+                                     replace = TRUE,
+                                     prob = probstemp)
+
+            # print("Line 1629 after sample")
+
+            # k0 region is sampled number modulo number of regions
+            k0_region_ind <- (region_ind - 1) %% num_regions + 1
+            # if(k0_region_ind ==0){
+            #   k0_region_ind <- num_regions
+            # }
+
+            # k1 region is the ceiling of sampled number divided by number of regions
+            # k1_region_ind <- ceiling(region_ind/num_regions)
+            k1_region_ind <- (region_ind - 1) %/% num_regions + 1
+
+
+            # print("k1_region_ind = ")
+            # print(k1_region_ind)
+
+            temp_lower2 <- tempbounds[k1_region_ind,1]
+            temp_upper2 <- tempbounds[k1_region_ind,2]
+
+            # print("num_regions = ")
+            # print(num_regions)
+            #
+            # print("region_ind = ")
+            # print(region_ind)
+            #
+            # print("k0_region_ind = ")
+            # print(k0_region_ind)
+
+            temp_mean0 <- intersectmat[k0_region_ind, 1]
+            # temp_mean0 <- (temp_mean0 + 0.5)*(max_resp - min_resp) + min_resp
+
+            # print("temp_mean0 = ")
+            # print(temp_mean0)
+            #
+            # print("temp_lower2 = ")
+            # print(temp_lower2)
+            #
+            # print("temp_upper2 = ")
+            # print(temp_upper2)
+
+            # if(temp_upper2 - temp_lower2 < 0.000001 ){
+            #
+            #   print("iter = ")
+            #   print(iter)
+            #
+            #   print("temp_upper2 = ")
+            #   print(temp_upper2)
+            #
+            #   print("temp_lower2 = ")
+            #   print(temp_lower2)
+            #
+            #   print("intersectmat = ")
+            #   print(intersectmat)
+            #
+            #   print("very small difference in limits")
+            # }
+
+
+            # if(temp_upper2 - temp_lower2 < 0.001 ){
+            #   stop("line 1980.  Very small range")
+            #
+            # }
+
+            # if(temp_lower2 + 0.00005  >  temp_upper2 - 0.00005 ){
+            #   print("line 1985 Very small range")
+            #
+            # }
+
+            tempbuffer <- (temp_upper2 - temp_lower2)/100
+
+            if( (temp_upper2 != Inf) & (temp_lower2 != -Inf)){
+              upper_buffered <- temp_upper2 - tempbuffer
+              lower_buffered <- temp_lower2 + tempbuffer
+
+            }else{
+              upper_buffered <- temp_upper2
+              lower_buffered <- temp_lower2
+
+            }
+
+
+            zdraw_temp <- rtruncnorm(n = 1,
+                                     a = lower_buffered,
+                                     b = upper_buffered,
+                                     mean = temp_mean0,
+                                     sd = 1)
+
+
+
+            # if( (zdraw_temp - temp_lower2 < 0.00001 ) | (temp_upper2 - zdraw_temp  < 0.00001 ) ){
+            #
+            #   print("intersectmat = ")
+            #   print(intersectmat)
+            #
+            #
+            #   print("iter = ")
+            #   print(iter)
+            #
+            #   print("temp_lower2 = ")
+            #   print(temp_lower2)
+            #
+            #   print("temp_upper2 = ")
+            #   print(temp_upper2)
+            #
+            #   print("temp_mean0 = ")
+            #   print(temp_mean0)
+            #
+            #   print("zdraw_temp = ")
+            #   print(zdraw_temp)
+            #
+            #   print("line 1988. draw very close to limit")
+            # }
+
+            if(is.na(zdraw_temp)){
+              print("line 1881")
+
+              print("temp_lower2 = ")
+              print(temp_lower2)
+
+              print("temp_upper2 = ")
+              print(temp_upper2)
+
+              print("temp_mean0 = ")
+              print(temp_mean0)
+
+
+              stop("NA zdraw_temp")
+
+            }
+
+
+            Z.mat[item_ind,  indiv ] <- zdraw_temp
+
+          } # end loop over items
+
+        } # end loop over individuals indiv in 1:n.ranker
+
+
+
+            # loop over time periods for general case 1 < t < T
+
+            for(t in 2:(n.time - 1)){
+
+              for(indiv in 1:n.ranker){
+                for(item_ind in 1:n.item){
+
+                  temp_ztpmin1 <- as.vector(Z.mat)[(t-2)*n.item*n.ranker +
+                                                     n.item*(indiv - 1) +
+                                                     item_ind]
+
+                  if(is.na(temp_ztpmin1)){
+
+                    print("line 1895")
+
+                    print("Z.mat = ")
+                    print(Z.mat)
+
+                    print("t = ")
+                    print(t)
+
+                    print("indiv = ")
+                    print(indiv)
+
+                    print("item_ind = ")
+                    print(item_ind)
+
+                    stop("NA temp_ztpmin1")
+                  }
+
+                  # must find mean corresponding to z in period t-1
+                  # This will be used in and after the loop over regions.
+                  # can directly obtain from dbarts
+                  # or find region
+                  # and use already saved region mean values
+
+
+                  # must find last lower bound that temp_ztpmin1 is greater than
+                  # or first upper bound that temp_ztpmin1 is below
+                  ktemp_tmin1 <- which((temp_ztpmin1 < intersectmat[, 3]) )[1]
+                  # Then obtain the corresponding region mean value
+                  temp_mean2 <- intersectmat[ktemp_tmin1,1]
+
+
+                  if(is.na(temp_mean2)){
+                    print("line 1908")
+
+                    print("ktemp_tmin1 = ")
+                    print(ktemp_tmin1)
+
+
+                    print("intersectmat = ")
+                    print(intersectmat)
+
+                    print("temp_ztpmin1 = ")
+                    print(temp_ztpmin1)
+
+                    stop("temp_mean2 NA")
+
+
+                  }
+
+
+
+                  # print("temp_mean2 = ")
+                  # print(temp_mean2)
+                  #
+                  # print("ktemp_tmin1 = ")
+                  # print(ktemp_tmin1)
+
+
+
+                  # Calculate the probabilities for each region in this time period
+                  # the regions being looped over are actually period t+1 regions
+
+                  # Same regions for all time periods if there are no time varying covariates
+
+                  # However, the weights are individual and time period specific
+
+                  # loop through regions
+
+
+                  # first column is the probabilities
+                  # second column is the lower bounds
+                  # third column is the upper bounds
+                  # temp_region_probs <- matrix(0,
+                  #                             nrow = nrow(intersectmat),
+                  #                             ncol = 3)
+
+
+                  temp_region_logprobs <- matrix(-Inf,
+                                                 nrow = nrow(intersectmat),
+                                                 ncol = 3)
+
+                  # Trunc norm prob of next periods latent value conditional on region
+
+                  # Create intervals from interval t+1 latent values
+
+                  rankvec_tp1 <- ranks_mat[,  (t)*n.ranker + indiv]
+
+                  # inds for j ranked below i in t+1
+
+                  # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+                  #
+                  # #max of latent variables for j ranked below i in t+1
+                  # # Z.mat
+                  #
+                  # if(length(belowrank_ind) ==0){
+                  #   temp_lower <- -Inf
+                  # }else{
+                  #   # Check that this is the period t+1 latent variable value, not period t
+                  #   temp_lower <- as.vector(Z.mat)[t*n.item*n.ranker+
+                  #                                    n.item*(indiv - 1) +
+                  #                                    belowrank_ind]
+                  # }
+                  #
+                  # # inds for j ranked above i in t+1
+                  #
+                  # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+                  #
+                  # #min of latent variables for j ranked below i in period t+1
+                  #
+                  # if(length(aboverank_ind) ==0){
+                  #   temp_upper <- Inf
+                  # }else{
+                  #   # Check that this is the period t+1 latent variable value, not period t
+                  #
+                  #   temp_upper <- as.vector(Z.mat)[t*n.item*n.ranker+
+                  #                                    n.item*(indiv - 1) +
+                  #                                    aboverank_ind]
+                  # }
+
+
+                  # want trunc norm probability of latent variable value for item_ind
+                  # in period t+1
+
+                  temp_ztp1 <- as.vector(Z.mat)[t*n.item*n.ranker+
+                                                  n.item*(indiv - 1) +
+                                                  item_ind]
+
+                  rankvec_t <- ranks_mat[,  (t-1)*n.ranker + indiv]
+
+
+
+                  # if(any(order(rankvec_t) !=
+                  #    order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                  #                           n.item*(indiv - 1) +
+                  #                           1:n.item]) )){
+                  #
+                  #   print("order(rankvec_t) = ")
+                  #   print(order(rankvec_t))
+                  #
+                  #   print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                  #                         n.item*(indiv - 1) +
+                  #                         1:n.item])  = ")
+                  #
+                  #   print(order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                  #                                  n.item*(indiv - 1) +
+                  #                                  1:n.item]) )
+                  #
+                  #   print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                  #                                n.item*(indiv - 1) +
+                  #                                1:n.item] = ")
+                  #
+                  #   print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                  #                            n.item*(indiv - 1) +
+                  #                            1:n.item])
+                  #
+                  #
+                  # }
+
+
+
+
+
+                  # inds for j ranked below i in t
+
+                  belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+
+                  #max of latent variables for j ranked below i in t
+                  # Z.mat
+
+                  if(length(belowrank_ind) ==0){
+                    temp_lower3 <- -Inf
+                  }else{
+                    temp_lower3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                                      n.item*(indiv - 1) +
+                                                      belowrank_ind]
+                  }
+
+                  if(is.na(temp_lower3)){
+                    print("NA temp_lower3")
+
+                    print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                                    n.item*(indiv - 1) +
+                                                    belowrank_ind] = ")
+
+                    print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                             n.item*(indiv - 1) +
+                                             belowrank_ind])
+
+                    print(" t = ")
+                    print(t)
+
+                    print(" n.item = ")
+                    print(n.item)
+
+                    print(" n.ranker = ")
+                    print(n.ranker)
+
+                    print(" indiv = ")
+                    print(indiv)
+
+                    print(" belowrank_ind = ")
+                    print(belowrank_ind)
+
+                    print(" Z.mat = ")
+                    print(Z.mat)
+
+                    stop("NA temp_lower3")
+
+                  }
+
+                  # inds for j ranked above i in t
+
+                  aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+
+                  #min of latent variables for j ranked below i in period t
+
+                  if(length(aboverank_ind) ==0){
+                    temp_upper3 <- Inf
+                  }else{
+                    temp_upper3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                                      n.item*(indiv - 1) +
+                                                      aboverank_ind]
+                  }
+
+                  # tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+                  tempmeanfordens <- intersectmat[1:num_regions, 1]
+
+                  # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+                  #                                    mean = tempmeanfordens,
+                  #                                    sd = 1)
+
+                  temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
+                                                           mean = tempmeanfordens,
+                                                           sd = 1)
+
+
+
+
+
+                  # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+                  #                                 mean = intersectmat[1:num_regions, 1],
+                  #                                 sd = 1)
+
+                  for(k_ind in 1:num_regions){
+                    # obtain mean for truncated normal distribution
+                    # temp_mean <- intersectmat[k_ind, 1]
+
+                    # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+                    #                               a=temp_lower,
+                    #                               b=Inf,
+                    #                               mean = temp_mean,
+                    #                               sd = 1)
+
+
+                    # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+                    #                          mean = temp_mean,
+                    #                          sd = 1)
+
+                    # temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+                    temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
+
+                    # Probability of z_t in intersection of
+                    # region k_ind (for period t+1)
+                    # and region defined by period t latent variables for other individuals
+                    # and rank for period t
+
+
+                    # tildeC_ktminl corresponds to
+                    # period t+1 k_ind region intereval
+
+                    temp_lower2 <- intersectmat[k_ind, 2]
+                    temp_upper2 <- intersectmat[k_ind, 3]
+
+
+
+                    # print(" line 2075 ")
+                    # print("temp_lower2 = ")
+                    # print(temp_lower2)
+                    #
+                    # print("temp_upper2 = ")
+                    # print(temp_upper2)
+                    #
+                    # print("temp_lower3 = ")
+                    # print(temp_lower3)
+                    #
+                    # print("temp_upper3 = ")
+                    # print(temp_upper3)
+
+
+                    if((temp_lower2 >= temp_upper3) | (temp_lower3 >= temp_upper2)){
+                      # if((temp_lower2 - temp_upper3 > -0.0001) | (temp_lower3 - temp_upper2 > -0.0001)){
+                      # intervals do not overlap, therefore assign probability zero
+                      # and skip to next iteration
+
+                      # print("k_ind = ")
+                      # print(k_ind)
+
+                      # print("ncol(temp_region_probs) = ")
+                      # print(ncol(temp_region_probs))
+
+                      # print("nrow(temp_region_probs) = ")
+                      # print(nrow(temp_region_probs))
+
+                      # temp_region_probs[k_ind, 1] <- 0
+                      # temp_region_probs[k_ind, 2] <- NA
+                      # temp_region_probs[k_ind, 3] <- NA
+
+                      temp_region_logprobs[k_ind, 1] <- -Inf
+                      temp_region_logprobs[k_ind, 2] <- NA
+                      temp_region_logprobs[k_ind, 3] <- NA
+
+
+                      next
+                    }
+
+
+
+                    temp_lower2 <- max(temp_lower2, temp_lower3)
+                    temp_upper2 <- min(temp_upper2, temp_upper3)
+
+
+                    if(temp_lower2 >= temp_upper2){
+
+                      print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                                  n.item*(indiv - 1) +
+                                                  1:n.item]")
+                      print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                               n.item*(indiv - 1) +
+                                               1:n.item])
+                      print("item_ind = ")
+                      print(item_ind)
+
+                      print("t = ")
+                      print(t)
+
+                      print("indiv = ")
+                      print(indiv)
+
+
+                      print("rankvec_t = ")
+                      print(rankvec_t)
+
+
+                      print("temp_lower2 = ")
+                      print(temp_lower2)
+
+                      print("temp_upper2 = ")
+                      print(temp_upper2)
+
+                      print("temp_lower3 = ")
+                      print(temp_lower3)
+
+                      print("temp_upper3 = ")
+                      print(temp_upper3)
+
+
+
+                      print("intersectmat[k_ind, 2] = ")
+                      print(intersectmat[k_ind, 2])
+
+                      print("intersectmat[k_ind, 3] = ")
+                      print(intersectmat[k_ind, 3])
+
+                      print("k_ind = ")
+                      print(k_ind)
+
+
+
+                      stop("Line 1917. temp_lower2 >= temp_upper2")
+                    }
+
+
+
+                    # probability of being in intersection region
+
+                    # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+                    # print("temp_upper2 = ")
+                    # print(temp_upper2)
+                    # print("temp_lower2 = ")
+                    # print(temp_lower2)
+                    #
+                    # print("temp_mean2 = ")
+                    # print(temp_mean2)
+                    #
+                    #
+                    # print("prob_t_region = ")
+                    # print(prob_t_region)
+                    #
+                    # print("temp_tnorm_prob = ")
+                    # print(temp_tnorm_prob)
+
+                    # prob_t_region <- prob_t_region*temp_tnorm_prob
+                    # prob_t_region <- temp_tnorm_prob
+                    logprob_t_region <- temp_tnorm_logprob
+
+                    # if(temp_tnorm_prob ==0){
+                    if(temp_tnorm_logprob == -Inf){
+                      print("temp_tnorm_prob = ")
+                      print(temp_tnorm_prob)
+
+                      print("temp_tnorm_probvec =")
+                      print(temp_tnorm_probvec)
+
+                      print("tempmeanfordens =")
+                      print(tempmeanfordens)
+
+                      print("temp_ztp1 =")
+                      print(temp_ztp1)
+
+                    }
+
+                    # save region probability
+
+                    # and save region bounds (or maybe more memory efficient to obtain the region again)
+
+                    # must multiply by other previously obtained probabilities
+
+                    # print("prob_t_region = ")
+                    # print(prob_t_region)
+
+                    # temp_region_probs[k_ind, 1] <- prob_t_region
+                    # temp_region_probs[k_ind, 2] <- temp_lower2
+                    # temp_region_probs[k_ind, 3] <- temp_upper2
+
+                    temp_region_logprobs[k_ind, 1] <- logprob_t_region
+                    temp_region_logprobs[k_ind, 2] <- temp_lower2
+                    temp_region_logprobs[k_ind, 3] <- temp_upper2
+
+                  }
+
+
+                  # sample a region using probabilities obtained above
+
+                  # print("Line 1903 before sample")
+
+
+                  # if(sum(temp_region_probs[,1] > 0) ==0){
+                  if(sum(temp_region_logprobs[,1] > -Inf) ==0){
+
+                    print("temp_tnorm_probvec =")
+                    print(temp_tnorm_probvec)
+
+
+                    print("intersectmat = ")
+                    print(intersectmat)
+
+                    print("temp_region_probs = ")
+                    print(temp_region_probs)
+
+                    print("item_ind = ")
+                    print(item_ind)
+
+                    print("t = ")
+                    print(t)
+
+                    print("indiv = ")
+                    print(indiv)
+
+                    print("rankvec_t = ")
+                    print(rankvec_t)
+
+                    print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                                  n.item*(indiv - 1) +
+                                                  1:n.item]")
+
+                    print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                             n.item*(indiv - 1) +
+                                             1:n.item])
+
+                    stop(" Line 2590 sum(temp_region_probs[,1] >0) == 0")
+                  }
+
+
+
+                  # region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+                  logprobstemp <- as.vector(temp_region_logprobs[,1])
+                  max_ll <- max(logprobstemp)
+                  logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+                  probstemp <- exp(logprobstemp - logsumexps)
+
+                  region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = probstemp)
+
+
+
+                  # temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+                  # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
+                  #
+                  # print("line 2102 temp_mean2_debug from predict = ")
+                  # print(temp_mean2_debug)
+                  #
+                  # print("line 2105 temp_mean2_origscale = ")
+                  # print(temp_mean2_origscale)
+                  #
+                  # print("line 2108 temp_mean2 = ")
+                  # print(temp_mean2)
+
+
+                  # if(temp_region_probs[region_ind, 3] - temp_region_probs[region_ind, 2] < 0.000001 ){
+                  #
+                  #
+                  #   print("temp_region_probs[region_ind, 2] = ")
+                  #   print(temp_region_probs[region_ind, 2])
+                  #
+                  #   print("temp_region_probs[region_ind, 3] = ")
+                  #   print(temp_region_probs[region_ind, 3])
+                  #
+                  #   print("temp_region_probs =")
+                  #   print(temp_region_probs)
+                  #
+                  #   print("intersectmat = ")
+                  #   print(intersectmat)
+                  #
+                  #   print("region_ind = ")
+                  #   print(region_ind)
+                  #
+                  #
+                  #
+                  #   stop("very small difference in limits")
+                  # }
+
+                  # if(temp_region_probs[region_ind, 3] -temp_region_probs[region_ind, 2] < 0.001 ){
+                  #   stop("line 2456. Very small range")
+                  #
+                  # }
+
+                  # if(temp_region_probs[region_ind, 2] + 0.00005  >  temp_region_probs[region_ind, 3] - 0.00005 ){
+                  #
+                  #   print("iter  = ")
+                  #   print(iter)
+                  #
+                  #   print("temp_region_probs =")
+                  #   print(temp_region_probs)
+                  #
+                  #   print("intersectmat = ")
+                  #   print(intersectmat)
+                  #
+                  #   print("region_ind = ")
+                  #   print(region_ind)
+                  #
+                  #   stop("line 2467 Very small range")
+                  #
+                  # }
+
+
+                  # tempbuffer <- (temp_region_probs[region_ind, 3] - temp_region_probs[region_ind, 2])/50
+                  #
+                  # if( (temp_region_probs[region_ind, 3] != Inf) & (temp_region_probs[region_ind, 2] != -Inf)){
+                  #   upper_buffered <- temp_region_probs[region_ind, 3] - tempbuffer
+                  #   lower_buffered <- temp_region_probs[region_ind, 2] + tempbuffer
+                  #
+                  # }else{
+                  #   upper_buffered <- temp_region_probs[region_ind, 3]
+                  #   lower_buffered <- temp_region_probs[region_ind, 2]
+                  #
+                  # }
+
+                  tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/50
+
+                  if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
+                    upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
+                    lower_buffered <- temp_region_logprobs[region_ind, 2] + tempbuffer
+
+                  }else{
+                    upper_buffered <- temp_region_logprobs[region_ind, 3]
+                    lower_buffered <- temp_region_logprobs[region_ind, 2]
+
+                  }
+
+                  zdraw_temp <- rtruncnorm(n = 1,
+                                           a=lower_buffered,
+                                           b=upper_buffered,
+                                           mean = temp_mean2, #temp_mean2_origscale,
+                                           sd = 1)
+
+
+                  if(is.na(zdraw_temp)){
+                    print(" line 2256")
+
+                    print("temp_region_probs[region_ind, 2] = ")
+                    print(temp_region_probs[region_ind, 2])
+
+                    print("temp_region_probs[region_ind, 3] = ")
+                    print(temp_region_probs[region_ind, 3])
+
+                    print("temp_mean2 = ")
+                    print(temp_mean2)
+
+                    print("zdraw_temp = ")
+                    print(zdraw_temp)
+
+
+                    stop("NA zdraw_temp")
+                  }
+
+
+                  # if( (zdraw_temp - temp_region_probs[region_ind, 2] < 0.00001 ) | (temp_region_probs[region_ind, 3] - zdraw_temp  < 0.00001 ) ){
+                  #
+                  #   print("iter = ")
+                  #   print(iter)
+                  #
+                  #   print("temp_region_probs =")
+                  #   print(temp_region_probs)
+                  #
+                  #   print("intersectmat = ")
+                  #   print(intersectmat)
+                  #
+                  #   print("region_ind = ")
+                  #   print(region_ind)
+                  #
+                  #   print("temp_region_probs[region_ind, 2] = ")
+                  #   print(temp_region_probs[region_ind, 2])
+                  #
+                  #   print("temp_region_probs[region_ind, 3] = ")
+                  #   print(temp_region_probs[region_ind, 3])
+                  #
+                  #   print("temp_mean2 = ")
+                  #   print(temp_mean2)
+                  #
+                  #   print("zdraw_temp = ")
+                  #   print(zdraw_temp)
+                  #
+                  #   stop("line 2470 draw very close to limit")
+                  # }
+
+
+
+                  # print("Line 1914 after sample")
+
+                  # zdraw_temp <- rtruncnorm(n = 1,
+                  #                          a=temp_region_probs[region_ind, 2],
+                  #                          b=temp_region_probs[region_ind, 3],
+                  #                          mean = temp_mean2,
+                  #                          sd = 1)
+
+
+                  if(is.na(zdraw_temp)){
+                    print(" line 2256")
+
+                    print("temp_region_probs[region_ind, 2] = ")
+                    print(temp_region_probs[region_ind, 2])
+
+                    print("temp_region_probs[region_ind, 3] = ")
+                    print(temp_region_probs[region_ind, 3])
+
+                    print("temp_mean2 = ")
+                    print(temp_mean2)
+
+                    stop("NA zdraw_temp")
+                  }
+
+                  Z.mat[item_ind, (t - 1)*n.ranker + indiv ] <- zdraw_temp
+
+                } # end loop over items
+              } # end loop over rankers
+
+
+            } # end loop over time periods
+
+            # check for special cases for n.time - 1, n.time - 2, n.time - 3
+
+            # special case for t = n.time
+
+        for(indiv in 1:n.ranker){
+          for(item_ind in 1:n.item){
+            temp_ztpmin1 <- as.vector(Z.mat)[(n.time-2)*n.item*n.ranker+
+                                               n.item*(indiv - 1) +
+                                               item_ind]
+
+
+            # must find mean corresponding to z in period t-1
+            # This will be used in and after the loop over regions.
+            # can directly obtain from dbarts
+            # or find region
+            # and use already saved region mean values
+
+
+            # must find last lower bound that temp_ztpmin1 is greater than
+            # for first upper bound that temp_ztpmin1 is below
+            ktemp_tmin1 <- which(temp_ztpmin1 < intersectmat[, 3])[1]
+            # Then obtain the corresponding region mean value
+            temp_mean2 <- intersectmat[ktemp_tmin1,1]
+
+            # now find interval
+
+
+            # tildeC_ktminl corresponds to
+            # period t+1 k_ind region intereval
+
+
+
+            rankvec_t <- ranks_mat[,  (n.time-1)*n.ranker + indiv]
+
+            # inds for j ranked below i in T
+
+            belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+
+            #max of latent variables for j ranked below i in T
+            # Z.mat
+
+            if(length(belowrank_ind) ==0){
+              temp_lower3 <- -Inf
+            }else{
+              temp_lower3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+                                                n.item*(indiv - 1) +
+                                                belowrank_ind]
+            }
+
+            # inds for j ranked above i in T
+
+            aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+
+            #min of latent variables for j ranked below i in period T
+
+            if(length(aboverank_ind) ==0){
+              temp_upper3 <- Inf
+            }else{
+              temp_upper3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+                                                n.item*(indiv - 1) +
+                                                aboverank_ind]
+            }
+
+
+            # temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+            # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
+            #
+            # print("line 2202 temp_mean2_debug from predict = ")
+            # print(temp_mean2_debug)
+            #
+            # print("line 2205 temp_mean2_origscale = ")
+            # print(temp_mean2_origscale)
+            #
+            # print("line 2208 temp_mean2 = ")
+            # print(temp_mean2)
+
+            # if(temp_upper3 -temp_lower3 < 0.000001 ){
+            #
+            #
+            #   print("temp_upper3 = ")
+            #   print(temp_upper3)
+            #
+            #   print("temp_mean2 = ")
+            #   print(temp_mean2)
+            #
+            #   stop("very small difference in limits")
+            # }
+
+
+            # if(temp_upper3 - temp_lower3 < 0.001 ){
+            #   stop("line 2613.  Very small range")
+            #
+            # }
+
+            # if(temp_lower3 + 0.00005  >  temp_upper3 - 0.00005 ){
+            #   print("line 2623 Very small range")
+            #
+            # }
+
+            tempbuffer <- (temp_upper3 - temp_lower3)/100
+
+            if( (temp_upper3 != Inf) & (temp_lower3 != -Inf)){
+              upper_buffered <- temp_upper3 - tempbuffer
+              lower_buffered <- temp_lower3 + tempbuffer
+
+            }else{
+              upper_buffered <- temp_upper3
+              lower_buffered <- temp_lower3
+
+            }
+
+            zdraw_temp <- rtruncnorm(n = 1,
+                                     a = lower_buffered,
+                                     b = upper_buffered,
+                                     mean = temp_mean2, #temp_mean2_origscale,
+                                     sd = 1)
+
+            # if( (zdraw_temp - temp_lower3 < 0.00001 ) | (temp_upper3 - zdraw_temp  < 0.00001 ) ){
+            #
+            #   print("iter = ")
+            #   print(iter)
+            #
+            #
+            #   print("intersectmat = ")
+            #   print(intersectmat)
+            #
+            #   print("temp_lower3 = ")
+            #   print(temp_lower3)
+            #
+            #   print("temp_upper3 = ")
+            #   print(temp_upper3)
+            #
+            #   print("temp_mean2 = ")
+            #   print(temp_mean2)
+            #
+            #   print("zdraw_temp = ")
+            #   print(zdraw_temp)
+            #
+            #   stop("line 2612 draw very close to limit")
+            # }
+
+            # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a = temp_lower3,
+            #                          b = temp_upper3,
+            #                          mean = temp_mean2,
+            #                          sd = 1)
+
+            if(is.na(zdraw_temp)){
+              print(" line 2367")
+              print("temp_lower3] = ")
+              print(temp_lower3)
+
+              print("temp_upper3 = ")
+              print(temp_upper3)
+
+              print("temp_mean2 = ")
+              print(temp_mean2)
+
+              stop("NA zdraw_temp")
+            }
+
+            Z.mat[item_ind, (n.time -1)*n.ranker + indiv ] <- zdraw_temp
+
+          } # end loop over items
+        } # end loop over rankers
+
+        #   } # end loop over items
+        #
+        # } # end loop over individuals indiv in 1:n.ranker
+
+      } # end loop over z iters
+    } # end else statement
 
 
 

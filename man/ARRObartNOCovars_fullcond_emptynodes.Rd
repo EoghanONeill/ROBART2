@@ -48,7 +48,8 @@ ARRObartNOCovars_fullcond_emptynodes(
   no_empty_proposals = FALSE,
   alpha_prior = FALSE,
   sigma_mu_prior = FALSE,
-  splitting_rules = "discrete"
+  splitting_rules = "discrete",
+  loop_order = "time_in_item"
 )
 }
 \arguments{

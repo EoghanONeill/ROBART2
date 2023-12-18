@@ -89,6 +89,14 @@ simulate_mu = function(tree, R, sigma2, sigma2_mu) {
   # Wipe all the old mus out for other nodes
   tree$tree_matrix[,'mu'] = NA
 
+  if(any(is.na(mu))){
+
+    print("(sumR / sigma2) / (nj/sigma2 + 1/sigma2_mu) = ")
+    print((sumR / sigma2) / (nj/sigma2 + 1/sigma2_mu))
+    stop("NA in mu vector")
+
+  }
+
   # Put in just the ones that are useful
   tree$tree_matrix[which_terminal,'mu'] = mu
 

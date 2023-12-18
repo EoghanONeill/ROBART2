@@ -178,7 +178,7 @@ noempty_update_tree = function(y, # Target variable
           # Shift them back because you have removed two rows
           curr_tree$tree_matrix[bad_parents,'parent'] = as.numeric(curr_tree$tree_matrix[bad_parents,'parent']) - 2
 
-          for(j in node_to_prune:nrow(curr_tree$tree_matrix)) {
+          for(j in 2:nrow(curr_tree$tree_matrix)) {
             # Find the current parent
             curr_parent = as.numeric(curr_tree$tree_matrix[j,'parent'])
             # Find both the children of this node
@@ -190,8 +190,14 @@ noempty_update_tree = function(y, # Target variable
               print("curr_tree$tree_matrix = ")
               print(curr_tree$tree_matrix)
 
+              print("bad_parents = ")
+              print(bad_parents)
+
               print("curr_children = ")
               print(curr_children)
+
+              print("j = ")
+              print(j)
             }
 
             curr_tree$tree_matrix[curr_parent,c('child_left','child_right')] = sort(curr_children)
