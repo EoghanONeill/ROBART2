@@ -64,15 +64,16 @@ create_stump = function(num_trees,
 } # End of function
 
 noempty_update_tree = function(y, # Target variable
-                       X, # Feature matrix
-                       type = c('grow',   # Grow existing tree
-                                'prune',  # Prune existing tree
-                                'change', # Change existing tree - change split variable and value for an internal node
-                                'swap'),  # Swap existing tree - swap splitting rules for two pairs of terminal nodes
-                       curr_tree,         # The current set of trees (not required if type is stump)
-                       node_min_size,     # The minimum size of a node to grow
-                       s,
-                       splitting_rules)                 # probability vector to be used during the growing process
+                               X, # Feature matrix
+                               type = c('grow',   # Grow existing tree
+                                        'prune',  # Prune existing tree
+                                        'change', # Change existing tree - change split variable and value for an internal node
+                                        'swap'),  # Swap existing tree - swap splitting rules for two pairs of terminal nodes
+                               curr_tree,         # The current set of trees (not required if type is stump)
+                               node_min_size,     # The minimum size of a node to grow
+                               s,
+                               splitting_rules,
+                               max_bad_trees)                 # probability vector to be used during the growing process
 {
 
 
@@ -143,27 +144,37 @@ noempty_update_tree = function(y, # Target variable
     vars_empty_pruned <- c(vars_empty_pruned,
                            curr_tree$tree_matrix[parents_temp, 'split_variable', drop=FALSE ])
 
-    for(prune_ind in 1:length(parents_temp)){
+    for(prune_ind in length(parents_temp):1){
       node_to_prune <- parents_temp[prune_ind]
       var_pruned_nodes = curr_tree$tree_matrix[node_to_prune, 'split_variable']
 
       deleted_nodes <- children_mat[prune_ind,]
+      children_mat[prune_ind,] <- c(-1, -1)
       curr_tree$tree_matrix = curr_tree$tree_matrix[-deleted_nodes,,
-                                                  drop = FALSE]
+                                                    drop = FALSE]
 
+      take1_inds <- (children_mat >= deleted_nodes[1]) & (children_mat < deleted_nodes[2])
+      take2_inds <- (children_mat >= deleted_nodes[1]) & (children_mat >= deleted_nodes[2])
 
-      children_mat[children_mat >= deleted_nodes[1] ] <- children_mat[children_mat >= deleted_nodes[1] ] - 2
+      # children_mat[ (children_mat >= deleted_nodes[1]) ] <- children_mat[children_mat >= deleted_nodes[1] ] - 2
+      children_mat[ take1_inds ] <- children_mat[take1_inds ] - 1
+      children_mat[ take2_inds ] <- children_mat[take2_inds ] - 2
 
-      parents_temp[parents_temp >= deleted_nodes[1]] <- parents_temp[parents_temp >= deleted_nodes[1]] - 2
+      take1_inds <- (parents_temp >= deleted_nodes[1]) & (parents_temp < deleted_nodes[2])
+      take2_inds <- (parents_temp >= deleted_nodes[1]) & (parents_temp >= deleted_nodes[2])
 
+      # parents_temp[parents_temp >= deleted_nodes[1]] <- parents_temp[parents_temp >= deleted_nodes[1]] - 2
+
+      parents_temp[take1_inds] <- parents_temp[take1_inds] - 1
+      parents_temp[take2_inds] <- parents_temp[take2_inds] - 2
 
 
       # Make this node terminal again with no children or split values
       curr_tree$tree_matrix[node_to_prune,c('terminal',
-                                         'child_left',
-                                         'child_right',
-                                         'split_variable',
-                                         'split_value')] = c(1, NA, NA, NA, NA)
+                                            'child_left',
+                                            'child_right',
+                                            'split_variable',
+                                            'split_value')] = c(1, NA, NA, NA, NA)
 
       # If we're back to a stump no need to call fill_tree_details
       if(nrow(curr_tree$tree_matrix) == 1) {
@@ -174,9 +185,17 @@ noempty_update_tree = function(y, # Target variable
         if(node_to_prune <= nrow(curr_tree$tree_matrix)) { # Only need do this if we've removed some observations from the middle of the tree matrix
           # If you're pruning any nodes which affect parent indices further down the tree then make sure to shift the parent values
           # bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=node_to_prune)
-          bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=deleted_nodes[1])
+          # bad_parents = which(as.numeric(curr_tree$tree_matrix[,'parent'])>=deleted_nodes[1])
           # Shift them back because you have removed two rows
-          curr_tree$tree_matrix[bad_parents,'parent'] = as.numeric(curr_tree$tree_matrix[bad_parents,'parent']) - 2
+          take1_inds <- which( (as.numeric(curr_tree$tree_matrix[,'parent']) >= deleted_nodes[1]) &
+                                 (as.numeric(curr_tree$tree_matrix[,'parent']) < deleted_nodes[2]) )
+          take2_inds <- which( (as.numeric(curr_tree$tree_matrix[,'parent']) >= deleted_nodes[1]) &
+                                 (as.numeric(curr_tree$tree_matrix[,'parent']) >= deleted_nodes[2]) )
+
+
+          # curr_tree$tree_matrix[bad_parents,'parent'] = as.numeric(curr_tree$tree_matrix[bad_parents,'parent']) - 2
+          curr_tree$tree_matrix[take1_inds,'parent'] = as.numeric(curr_tree$tree_matrix[take1_inds,'parent']) - 1
+          curr_tree$tree_matrix[take2_inds,'parent'] = as.numeric(curr_tree$tree_matrix[take2_inds,'parent']) - 2
 
           for(j in 2:nrow(curr_tree$tree_matrix)) {
             # Find the current parent
@@ -190,8 +209,14 @@ noempty_update_tree = function(y, # Target variable
               print("curr_tree$tree_matrix = ")
               print(curr_tree$tree_matrix)
 
-              print("bad_parents = ")
-              print(bad_parents)
+              print("take1_inds = ")
+              print(take1_inds)
+
+              print("take2_inds = ")
+              print(take2_inds)
+
+              print("deleted_nodes = ")
+              print(deleted_nodes)
 
               print("curr_children = ")
               print(curr_children)
@@ -243,10 +268,10 @@ noempty_update_tree = function(y, # Target variable
   # Call the appropriate function to get the new tree
   new_tree = switch(type,
                     grow = grow_tree(X, y, curr_tree, node_min_size, s,
-                                     splitting_rules),
+                                     splitting_rules, max_bad_trees),
                     prune = prune_tree(X, y, curr_tree),
                     change = change_tree(X, y, curr_tree, node_min_size,
-                                         splitting_rules),
+                                         splitting_rules, max_bad_trees),
                     swap = swap_tree(X, y, curr_tree, node_min_size))
 
   new_tree$vars_empty_pruned <- vars_empty_pruned
@@ -267,14 +292,15 @@ update_tree = function(y, # Target variable
                        curr_tree,         # The current set of trees (not required if type is stump)
                        node_min_size,     # The minimum size of a node to grow
                        s,
-                       splitting_rules)                 # probability vector to be used during the growing process
-  {
+                       splitting_rules,
+                       max_bad_trees)                 # probability vector to be used during the growing process
+{
 
   # Call the appropriate function to get the new tree
   new_tree = switch(type,
-                    grow = grow_tree(X, y, curr_tree, node_min_size, s, splitting_rules),
+                    grow = grow_tree(X, y, curr_tree, node_min_size, s, splitting_rules, max_bad_trees),
                     prune = prune_tree(X, y, curr_tree),
-                    change = change_tree(X, y, curr_tree, node_min_size, splitting_rules),
+                    change = change_tree(X, y, curr_tree, node_min_size, splitting_rules, max_bad_trees),
                     swap = swap_tree(X, y, curr_tree, node_min_size))
 
   # Return the new tree
@@ -284,7 +310,7 @@ update_tree = function(y, # Target variable
 
 # Grow_tree function ------------------------------------------------------
 
-grow_tree = function(X, y, curr_tree, node_min_size, s, splitting_rules) {
+grow_tree = function(X, y, curr_tree, node_min_size, s, splitting_rules, max_bad_trees) {
 
   # Set up holder for new tree
   new_tree = curr_tree
@@ -301,7 +327,7 @@ grow_tree = function(X, y, curr_tree, node_min_size, s, splitting_rules) {
   }
 
   available_values = NULL
-  max_bad_trees = 50
+  # max_bad_trees = 50
   count_bad_trees = 0
   bad_trees = TRUE
 
@@ -474,7 +500,7 @@ grow_tree = function(X, y, curr_tree, node_min_size, s, splitting_rules) {
     if(count_bad_trees == max_bad_trees) {
       curr_tree$var = 0
       return(curr_tree)
-      }
+    }
   }
   # Return new_tree
   return(new_tree)
@@ -526,6 +552,39 @@ prune_tree = function(X, y, curr_tree) {
   # Delete these two rows from the tree matrix
   new_tree$tree_matrix = new_tree$tree_matrix[-c(child_left,child_right),,
                                               drop = FALSE]
+
+  if(child_right > child_left + 1){
+    print("child_right")
+    print(child_right)
+
+    print("child_left")
+    print(child_left)
+
+    print("node_to_prune = ")
+    print(node_to_prune)
+
+    print("new_tree$tree_matrix = ")
+    print(new_tree$tree_matrix)
+
+    stop(" child_right > child_left + 1")
+  }
+
+  if(child_left > node_to_prune + 1){
+    print("child_right")
+    print(child_right)
+
+    print("child_left")
+    print(child_left)
+
+    print("node_to_prune = ")
+    print(node_to_prune)
+
+    print("new_tree$tree_matrix = ")
+    print(new_tree$tree_matrix)
+
+    stop("child_left > node_to_prune + 1")
+  }
+
   # Make this node terminal again with no children or split values
   new_tree$tree_matrix[parent_pick,c('terminal',
                                      'child_left',
@@ -544,6 +603,18 @@ prune_tree = function(X, y, curr_tree) {
       bad_parents = which(as.numeric(new_tree$tree_matrix[,'parent'])>=node_to_prune)
       # Shift them back because you have removed two rows
       new_tree$tree_matrix[bad_parents,'parent'] = as.numeric(new_tree$tree_matrix[bad_parents,'parent']) - 2
+
+      # take1_inds <- which( (as.numeric(new_tree$tree_matrix[,'parent']) >= child_left) &
+      #                        (as.numeric(new_tree$tree_matrix[,'parent']) < child_right) )
+      # take2_inds <- which( (as.numeric(new_tree$tree_matrix[,'parent']) >= child_left) &
+      #                        (as.numeric(new_tree$tree_matrix[,'parent']) >= child_right) )
+      #
+      #
+      # # curr_tree$tree_matrix[bad_parents,'parent'] = as.numeric(curr_tree$tree_matrix[bad_parents,'parent']) - 2
+      # new_tree$tree_matrix[take1_inds,'parent'] = as.numeric(new_tree$tree_matrix[take1_inds,'parent']) - 1
+      # new_tree$tree_matrix[take2_inds,'parent'] = as.numeric(new_tree$tree_matrix[take2_inds,'parent']) - 2
+
+
 
       for(j in node_to_prune:nrow(new_tree$tree_matrix)) {
         # Find the current parent
@@ -570,7 +641,7 @@ prune_tree = function(X, y, curr_tree) {
 
 # change_tree function ----------------------------------------------------
 
-change_tree = function(X, y, curr_tree, node_min_size, splitting_rules) {
+change_tree = function(X, y, curr_tree, node_min_size, splitting_rules, max_bad_trees) {
 
   # Change a node means change out the split value and split variable of an internal node. Need to make sure that this does now produce a bad tree (i.e. zero terminal nodes)
 
@@ -599,7 +670,7 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules) {
 
   # Create a while loop to get good trees
   # Create a counter to stop after a certain number of bad trees
-  max_bad_trees = 50
+  # max_bad_trees = 50
   count_bad_trees = 0
   bad_trees = TRUE
   while(bad_trees) {
@@ -609,7 +680,7 @@ change_tree = function(X, y, curr_tree, node_min_size, splitting_rules) {
     # choose an internal node to change
     # node_to_change = sample(internal_nodes, 1)
     node_to_change = sample(internal_nodes, 1,
-                           prob = as.integer(internal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
+                            prob = as.integer(internal_node_size >= 2* node_min_size)) # Choose which node to split, set prob to zero for any nodes that are too small
 
     # Get the covariate that will be changed
     var_changed_node = as.numeric(new_tree$tree_matrix[node_to_change, 'split_variable'])

@@ -39,12 +39,12 @@ fill_tree_details = function(curr_tree, X) {
                              'left', 'right')
       if(left_or_right == 'left') {
         # If left use less than condition
-        new_tree_matrix[i,'node_size'] = sum(X[node_indices == curr_parent,split_var] < split_val)
-        node_indices[node_indices == curr_parent][X[node_indices == curr_parent,split_var] < split_val] = i
+        new_tree_matrix[i,'node_size'] <- sum(X[node_indices == curr_parent,split_var] < split_val)
+        node_indices[node_indices == curr_parent][X[node_indices == curr_parent,split_var] < split_val] <- i
       } else {
         # If right use greater than condition
-        new_tree_matrix[i,'node_size'] = sum(X[node_indices == curr_parent,split_var] >= split_val)
-        node_indices[node_indices == curr_parent][X[node_indices == curr_parent,split_var] >= split_val] = i
+        new_tree_matrix[i,'node_size'] <- sum(X[node_indices == curr_parent,split_var] >= split_val)
+        node_indices[node_indices == curr_parent][X[node_indices == curr_parent,split_var] >= split_val] <- i
       }
     } # End of loop through table
   }

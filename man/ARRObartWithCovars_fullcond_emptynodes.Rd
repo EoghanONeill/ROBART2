@@ -52,7 +52,8 @@ ARRObartWithCovars_fullcond_emptynodes(
   no_empty_proposals = FALSE,
   alpha_prior = FALSE,
   sigma_mu_prior = FALSE,
-  splitting_rules = "discrete"
+  splitting_rules = "discrete",
+  max_bad_trees = 10
 )
 }
 \arguments{

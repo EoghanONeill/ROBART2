@@ -49,7 +49,8 @@ ARRObartNOCovars_fullcond_emptynodes(
   alpha_prior = FALSE,
   sigma_mu_prior = FALSE,
   splitting_rules = "discrete",
-  loop_order = "time_in_item"
+  loop_order = "time_in_item",
+  max_bad_trees = 10
 )
 }
 \arguments{
