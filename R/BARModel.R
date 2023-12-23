@@ -1634,8 +1634,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
     intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
 
 
-    print(" emptynodecount = ")
-    print(emptynodecount)
+    # print(" emptynodecount = ")
+    # print(emptynodecount)
 
     if(nrow(intersectmat) > 350){
 
@@ -1672,8 +1672,8 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     # print("Line 1169")
 
-    print("nrow(intersectmat) = ")
-    print(nrow(intersectmat))
+    # print("nrow(intersectmat) = ")
+    # print(nrow(intersectmat))
 
     if(loop_order == "time_in_item"){
       for(z_iter_ind in 1:num_z_iters){
