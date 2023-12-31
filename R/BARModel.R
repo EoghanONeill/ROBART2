@@ -1834,7 +1834,15 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             #                                    sd = 1)
 
 
+            if(temp_lower3 >= temp_upper3){
+              print(" temp_lower3 = ")
+              print(temp_lower3)
 
+              print(" temp_upper3 = ")
+              print(temp_upper3)
+
+              stop("Line 1844. temp_lower3 >= temp_upper3")
+            }
 
 
             # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
@@ -2186,8 +2194,18 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               lower_buffered <- temp_lower2 + tempbuffer
 
             }else{
+
+
               upper_buffered <- temp_upper2
               lower_buffered <- temp_lower2
+
+              if(temp_upper2 != Inf){
+                upper_buffered <- temp_upper2 - 0.00001
+              }
+
+              if(temp_lower2 != -Inf){
+                lower_buffered <- temp_lower2 + 0.00001
+              }
 
             }
 
@@ -2468,7 +2486,10 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
               }
 
+
+
               # inds for j ranked above i in t
+
 
               aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
 
@@ -2481,6 +2502,17 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                   n.item*(indiv - 1) +
                                                   aboverank_ind]
               }
+
+              if(temp_lower3 >= temp_upper3){
+                print(" temp_lower3 = ")
+                print(temp_lower3)
+
+                print(" temp_upper3 = ")
+                print(temp_upper3)
+
+                stop("Line 2495. temp_lower3 >= temp_upper3")
+              }
+
 
               # tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
               tempmeanfordens <- intersectmat[1:num_regions, 1]
@@ -2516,7 +2548,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
               if(any(temp_region_logprobs[good_regions, 2] >= temp_region_logprobs[good_regions, 3])){
-                stop(" line 2511 bounds badly defined")
+                print("good_regions = ")
+                print(good_regions)
+
+                print("temp_region_logprobs = ")
+                print(temp_region_logprobs)
+
+                stop(" line 2525 bounds badly defined")
               }
               # CAN VECTORIZE THIS EVEN MORE
 
@@ -2853,7 +2891,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               #
               # }
 
-              tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/50
+              tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/100
 
               if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
                 upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
@@ -2863,17 +2901,33 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                 upper_buffered <- temp_region_logprobs[region_ind, 3]
                 lower_buffered <- temp_region_logprobs[region_ind, 2]
 
+
+                if(temp_region_logprobs[region_ind, 3] != Inf){
+                  upper_buffered <- temp_region_logprobs[region_ind, 3] - 0.00001
+                }
+
+                if(temp_region_logprobs[region_ind, 2] != -Inf){
+                  lower_buffered <- temp_region_logprobs[region_ind, 2] + 0.00001
+                }
+
               }
 
-              zdraw_temp <- rtruncnorm(n = 1,
-                                       a=lower_buffered,
-                                       b=upper_buffered,
-                                       mean = temp_mean2, #temp_mean2_origscale,
-                                       sd = 1)
+
+              if(abs( temp_mean2/ (upper_buffered - lower_buffered ) ) > 10^15){
+                # this is a quick fix for when the bounds are close or very far from the mean
+                # this does not really address any potential underlying issue
+                zdraw_temp <- (lower_buffered + upper_buffered)/2
+              }else{
+                zdraw_temp <- rtruncnorm(n = 1,
+                                         a=lower_buffered,
+                                         b=upper_buffered,
+                                         mean = temp_mean2, #temp_mean2_origscale,
+                                         sd = 1)
+              }
 
 
               if(is.na(zdraw_temp)){
-                print(" line 2256")
+                print(" line 2883")
 
                 print("temp_region_logprobs = ")
                 print(temp_region_logprobs)
@@ -3062,6 +3116,13 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               upper_buffered <- temp_upper3
               lower_buffered <- temp_lower3
 
+              if(temp_upper3 != Inf){
+                upper_buffered <- temp_upper3 - 0.00001
+              }
+
+              if(temp_upper3 != -Inf){
+                lower_buffered <- temp_lower3 + 0.00001
+              }
             }
 
             zdraw_temp <- rtruncnorm(n = 1,
@@ -3291,7 +3352,15 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             #                                          mean = tempmeanfordens,
             #                                          sd = 1)
 
+            if(temp_lower3 >= temp_upper3){
+              print(" temp_lower3 = ")
+              print(temp_lower3)
 
+              print(" temp_upper3 = ")
+              print(temp_upper3)
+
+              stop("Line 3328. temp_lower3 >= temp_upper3")
+            }
 
             bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
 
@@ -3663,6 +3732,14 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               upper_buffered <- temp_upper2
               lower_buffered <- temp_lower2
 
+              if(temp_upper2 != Inf){
+                upper_buffered <- temp_upper2 - 0.00001
+              }
+
+              if(temp_lower2 != -Inf){
+                lower_buffered <- temp_lower2 + 0.00001
+              }
+
             }
 
 
@@ -3971,6 +4048,15 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               #                                          mean = tempmeanfordens,
               #                                          sd = 1)
 
+              if(temp_lower3 >= temp_upper3){
+                print(" temp_lower3 = ")
+                print(temp_lower3)
+
+                print(" temp_upper3 = ")
+                print(temp_upper3)
+
+                stop("Line 4016 temp_lower3 >= temp_upper3")
+              }
 
               bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
 
@@ -4349,7 +4435,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               #
               # }
 
-              tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/50
+              tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/100
 
               if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
                 upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
@@ -4357,13 +4443,36 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
               }else{
                 upper_buffered <- temp_region_logprobs[region_ind, 3]
                 lower_buffered <- temp_region_logprobs[region_ind, 2]
+
+                if(temp_region_logprobs[region_ind, 3] != Inf){
+                  upper_buffered <- temp_region_logprobs[region_ind, 3] - 0.00001
+                }
+
+                if(temp_region_logprobs[region_ind, 2] != -Inf){
+                  lower_buffered <- temp_region_logprobs[region_ind, 2] + 0.00001
+                }
+
+
               }
 
-              zdraw_temp <- rtruncnorm(n = 1,
-                                       a=lower_buffered,
-                                       b=upper_buffered,
-                                       mean = temp_mean2, #temp_mean2_origscale,
-                                       sd = 1)
+              if(abs( temp_mean2/ (upper_buffered - lower_buffered ) ) > 10^15){
+                # this is a quick fix for when the bounds are close or very far from the mean
+                # this does not really address any potential underlying issue
+                zdraw_temp <- (lower_buffered + upper_buffered)/2
+              }else{
+                zdraw_temp <- rtruncnorm(n = 1,
+                                         a=lower_buffered,
+                                         b=upper_buffered,
+                                         mean = temp_mean2, #temp_mean2_origscale,
+                                         sd = 1)
+              }
+
+
+              # zdraw_temp <- rtruncnorm(n = 1,
+              #                          a=lower_buffered,
+              #                          b=upper_buffered,
+              #                          mean = temp_mean2, #temp_mean2_origscale,
+              #                          sd = 1)
 
 
               if(is.na(zdraw_temp)){
@@ -4557,6 +4666,15 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
             }else{
               upper_buffered <- temp_upper3
               lower_buffered <- temp_lower3
+
+              if(temp_upper3 != Inf){
+                upper_buffered <- temp_upper3 - 0.00001
+              }
+
+              if(temp_lower3 != -Inf){
+                lower_buffered <- temp_lower3 + 0.00001
+              }
+
 
             }
 
