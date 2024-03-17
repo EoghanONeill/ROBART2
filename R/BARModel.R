@@ -29036,6 +29036,13 @@ RObartnp <- function(pair.comp.ten,
 #' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
 #' @param diff_num_test_rankers Equal to 1 if there is a different number of rankers in the test data than in the training data. (assumes no structure to input data)
 #' @param keep_zmat Boolean. If equal to TRUE output the draws of Zmat for training data and test data
+#' @param tree_power Tree prior parameter for outcome model.
+#' @param tree_base Tree prior parameter for outcome model.
+#' @param sparse If equal to TRUE, use Linero Dirichlet prior on splitting probabilities
+#' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_split_prior If TRUE, set hyperprior for Linero alpha parameter
+#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.
 #' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
 #' @export
 RObart <- function(pair.comp.ten,
@@ -29063,10 +29070,17 @@ RObart <- function(pair.comp.ten,
                    rngKind = "default",
                    rngNormalKind = "default",
                    rngSeed = NA_integer_,
-                   updateState = FALSE,
+                   updateState = TRUE, # FALSE,
                    num_lags = 1,
                    diff_num_test_rankers = 0,
-                   keep_zmat = FALSE){
+                   keep_zmat = FALSE,
+                   tree_power = 2,
+                   tree_base = 0.95,
+                   sparse = FALSE,
+                   alpha_a_y = 0.5,
+                   alpha_b_y = 1,
+                   alpha_split_prior = TRUE,
+                   n.burnin = floor(dim(pair.comp.ten)[1]/2)){
   ## store MCMC draws
 
   # print("begin function")
@@ -29182,6 +29196,26 @@ RObart <- function(pair.comp.ten,
 
     }
 
+    p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
+
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- rep(NA, iter.max)
+      draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+      draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+    }
 
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
@@ -29209,6 +29243,7 @@ RObart <- function(pair.comp.ten,
                         data = Xmat.train,
                         #test = Xmat.test,
                         control = control,
+                        tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
                         resid.prior = fixed(1),
                         sigma=1 #check if this is the correct approach for setting the variance to 1
       )
@@ -29218,6 +29253,7 @@ RObart <- function(pair.comp.ten,
                         data = Xmat.train,
                         test = Xmat.test,
                         control = control,
+                        tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
                         resid.prior = fixed(1), #this was suggested by the dbarts package author. I assume this is sufficient
                         sigma=1 #
       )
@@ -29233,6 +29269,11 @@ RObart <- function(pair.comp.ten,
     # sampler$setSigma(sigma = 1)
 
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
 
     #mu = as.vector( alpha + X.mat %*% beta )
     sampler$sampleTreesFromPrior()
@@ -29245,6 +29286,17 @@ RObart <- function(pair.comp.ten,
     # print(samplestemp$sigma)
 
     # mupreds <- sampler$predict(Xmat.train)
+
+
+
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
+
 
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
@@ -29299,6 +29351,7 @@ RObart <- function(pair.comp.ten,
     # sigma2.beta = tau2.beta
 
   }else{
+    stop("code for non-zero initial list not yet written")
     Z.mat <- initial.list$Z.mat
     # alpha = initial.list$alpha
     # beta = initial.list$beta
@@ -29408,6 +29461,13 @@ RObart <- function(pair.comp.ten,
     # sampler$setSigma(sigma = 1)
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
 
+
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+
     #mu = as.vector( alpha + X.mat %*% beta )
     samplestemp <- sampler$run()
 
@@ -29418,7 +29478,11 @@ RObart <- function(pair.comp.ten,
     # print("sigma = ")
     # print(samplestemp$sigma)
 
-
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
 
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
@@ -29454,7 +29518,18 @@ RObart <- function(pair.comp.ten,
 
     }
 
+    if (sparse & (iter > floor(n.burnin * 0.5))) {
+      # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+      # s_z <- s_update_z[[1]]
 
+      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+      s_y <- s_update_y[[1]]
+
+      if(alpha_split_prior){
+        # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+      }
+    }
 
     # store value at this iteration
     if(keep_zmat==TRUE){
@@ -29471,6 +29546,14 @@ RObart <- function(pair.comp.ten,
       draw$mu_test[,iter] <- samplestemp$test[,1]
     }
 
+    if(sparse){
+      draw$alpha_s_y_store[iter] <- alpha_s_y
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter,] <- var_count_y
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter,] <- s_y
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
 
     # print iteration number
     if(iter %% print.opt == 0){

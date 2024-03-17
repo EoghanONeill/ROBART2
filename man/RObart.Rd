@@ -25,10 +25,17 @@ RObart(
   rngKind = "default",
   rngNormalKind = "default",
   rngSeed = NA_integer_,
-  updateState = FALSE,
+  updateState = TRUE,
   num_lags = 1,
   diff_num_test_rankers = 0,
-  keep_zmat = FALSE
+  keep_zmat = FALSE,
+  tree_power = 2,
+  tree_base = 0.95,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_split_prior = TRUE,
+  n.burnin = floor(dim(pair.comp.ten)[1]/2)
 )
 }
 \arguments{
@@ -61,6 +68,20 @@ RObart(
 \item{diff_num_test_rankers}{Equal to 1 if there is a different number of rankers in the test data than in the training data. (assumes no structure to input data)}
 
 \item{keep_zmat}{Boolean. If equal to TRUE output the draws of Zmat for training data and test data}
+
+\item{tree_power}{Tree prior parameter for outcome model.}
+
+\item{tree_base}{Tree prior parameter for outcome model.}
+
+\item{sparse}{If equal to TRUE, use Linero Dirichlet prior on splitting probabilities}
+
+\item{alpha_a_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_b_y}{Linero alpha prior parameter for outcome equation splitting probabilities}
+
+\item{alpha_split_prior}{If TRUE, set hyperprior for Linero alpha parameter}
+
+\item{n.burnin}{Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.}
 
 \item{X.mat}{An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.}
 }
