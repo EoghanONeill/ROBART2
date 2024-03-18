@@ -50,7 +50,7 @@ ARRObartWithCovars_fullcond_emptynodes(
   lambda = 0.1,
   sparse = TRUE,
   no_empty_proposals = FALSE,
-  alpha_prior = FALSE,
+  alpha_prior = TRUE,
   sigma_mu_prior = FALSE,
   splitting_rules = "discrete",
   max_bad_trees = 10

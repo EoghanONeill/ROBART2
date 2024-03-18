@@ -25,7 +25,7 @@ ARRObartNOCovars_fullcond(
   rngKind = "default",
   rngNormalKind = "default",
   rngSeed = NA_integer_,
-  updateState = FALSE,
+  updateState = TRUE,
   num_lags = 1,
   diff_num_test_rankers = 0,
   keep_zmat = FALSE,
@@ -35,7 +35,14 @@ ARRObartNOCovars_fullcond(
   rho_hdr = 0.5,
   smoothing_method = "AR",
   num_horizon = 1,
-  num_z_iters = 10
+  num_z_iters = 10,
+  tree_power = 2,
+  tree_base = 0.95,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_split_prior = TRUE,
+  n.burnin = floor(dim(pair.comp.ten)[1]/2)
 )
 }
 \arguments{
