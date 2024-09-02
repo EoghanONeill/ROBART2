@@ -1542,10 +1542,10 @@ ARRObartNOCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
     # create vector of indices for ranker indiv in time period 1
 
-    # this part is not really necessary
-    ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-    ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
-    obs_indices <- ind_start:ind_end
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
 
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
@@ -10433,10 +10433,10 @@ ARRObartNOCovars_fullcond_EmpN_topk <- function(ranks_mat, # pair.comp.ten,
 
     # create vector of indices for ranker indiv in time period 1
 
-    # this part is not really necessary
-    ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-    ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
-    obs_indices <- ind_start:ind_end
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
 
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
@@ -19112,10 +19112,10 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     # create vector of indices for ranker indiv in time period 1
 
-    # this part is not really necessary
-    ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-    ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
-    obs_indices <- ind_start:ind_end
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
 
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
@@ -24040,10 +24040,10 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
 
     # create vector of indices for ranker indiv in time period 1
 
-    # this part is not really necessary
-    ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-    ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
-    obs_indices <- ind_start:ind_end
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
 
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
@@ -33079,10 +33079,10 @@ ARRObartNOCovars <- function(pair.comp.ten,
 
     # create vector of indices for ranker indiv in time period 1
 
-    # this part is not really necessary
-    ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-    ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
-    obs_indices <- ind_start:ind_end
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
 
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
@@ -34040,10 +34040,10 @@ ARRObartNOCovars <- function(pair.comp.ten,
       # create intersection matrices
 
 
-      # create vector of indices for ranker indiv in time period T
-      ind_start <- (n.time - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-      ind_end <- (n.time - 1)*n.ranker*n.item+n.item*indiv
-      obs_indices <- ind_start:ind_end
+      # # create vector of indices for ranker indiv in time period T
+      # ind_start <- (n.time - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+      # ind_end <- (n.time - 1)*n.ranker*n.item+n.item*indiv
+      # obs_indices <- ind_start:ind_end
 
       # if(itemcovars == FALSE){
       #
@@ -34466,10 +34466,10 @@ ARRObartNOCovars <- function(pair.comp.ten,
       # create intersection matrices
       # note that intersection matrices can be time period specific if allow for time period specific covariates
 
-      # create vector of indices for ranker indiv in time period T
-      ind_start <- (n.time -1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-      ind_end <- (n.time -1 - 1)*n.ranker*n.item+n.item*indiv
-      obs_indices <- ind_start:ind_end
+      # # create vector of indices for ranker indiv in time period T
+      # ind_start <- (n.time -1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+      # ind_end <- (n.time -1 - 1)*n.ranker*n.item+n.item*indiv
+      # obs_indices <- ind_start:ind_end
 
 
       intersectmat_Tmin1 <- intersectmat
@@ -36174,10 +36174,10 @@ ARRObartNOCovars <- function(pair.comp.ten,
         # create intersection matrices
         # note that intersection matrices can be time period specific if allow for time period specific covariates
 
-        # create vector of indices for ranker indiv in time period T
-        ind_start <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-        ind_end <- (t - 1)*n.ranker*n.item+n.item*indiv
-        obs_indices <- ind_start:ind_end
+        # # create vector of indices for ranker indiv in time period T
+        # ind_start <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+        # ind_end <- (t - 1)*n.ranker*n.item+n.item*indiv
+        # obs_indices <- ind_start:ind_end
 
         # intersectmat <- Biglist_intersectmats[[t]]
 
@@ -42853,10 +42853,10 @@ ARRObartWithCovars <- function(pair.comp.ten,
         # create intersection matrices
         # note that intersection matrices can be time period specific if allow for time period specific covariates
 
-        # create vector of indices for ranker indiv in time period T
-        ind_start <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
-        ind_end <- (t - 1)*n.ranker*n.item+n.item*indiv
-        obs_indices <- ind_start:ind_end
+        # # create vector of indices for ranker indiv in time period T
+        # ind_start <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+        # ind_end <- (t - 1)*n.ranker*n.item+n.item*indiv
+        # obs_indices <- ind_start:ind_end
 
         if(itemcovars == FALSE){
           intersectmat <- Biglist_intersectmats[[t]]
@@ -47177,6 +47177,11 @@ RObart <- function(pair.comp.ten,
 
     }else{
       if(nrow(X.train)==n.item*n.ranker){
+
+        if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+        if(any(is.na(mu))){stop("NA in mu")}
+
+
         Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu, weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
                                                   n.item = n.item )
       }else{

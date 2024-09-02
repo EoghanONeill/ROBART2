@@ -144,3 +144,166 @@ RankToplist <- function(Rank = NULL, Toplist = NULL, mu = NULL){
 RankDist <- function(Rank1, Rank2, method = "kendall"){
   return( ( 1 - cor(Rank1, Rank2, method = method) )/2 )
 }
+
+
+### kendall tau distance
+#' Compute the Normalized Kendall Tau Distance from two Full Ranking Lists
+#'
+#' @param Rank1 A full ranking list containing the ranks of all the \eqn{N} entities. Note that here we follow the usual definition of rank in R, that is, the larger the evaluation score of an entity, the larger this entity's rank is. Specifically, for a full ranking list of \eqn{N} entities, the rank of an entity equals \eqn{N+1} minus its ranked position.
+#' @param Rank2 Another full ranking list containing the ranks of all the \eqn{N} entities.
+#' @return The normalized Kendall tau distance from the two full ranking lists.
+#' @export
+Partialtauhat <- function(Rank1, Rank2, method = "kendall"){
+  # itemsinboth <- intersect(Rank1,Rank2)
+  # Rank1subvec <- Rank1[Rank1 %in% Rank2]
+  # Rank2subvec <- Rank2[Rank2 %in% Rank1]
+  if(length(Rank1) != length(Rank2)){
+    stop("Rank bectors must be of the same length")
+  }
+
+  # itemsinboth <- intersect(which(!is.na(Rank1)), which(!is.na(Rank2)))
+  #
+  # Rank1subvec <- Rank1[itemsinboth]
+  # Rank2subvec <- Rank2[itemsinboth]
+
+  # print("cor(Rank1subvec, Rank2subvec, method = method) = ")
+  # print(cor(Rank1subvec, Rank2subvec, method = method) )
+  #
+  # print("(1 - cor(Rank1subvec, Rank2subvec, method = method))/2 = ")
+  # print((1 - cor(Rank1subvec, Rank2subvec, method = method))/2 )
+  #
+  # print("Rank1subvec = ")
+  # print(Rank1subvec)
+  #
+  # print("Rank2subvec = ")
+  # print(Rank2subvec)
+
+  # itemsinboth <- intersect(Rank1,Rank2)
+  # Rank1subvec <- Rank1[Rank1 %in% Rank2]
+  # Rank2subvec <- Rank2[Rank2 %in% Rank1]
+
+  ntilde <- length(intersect(which(!is.na(Rank1)), which(!is.na(Rank2))))
+  # ntilde <- length(unique(c(which(!is.na(Rank1)), which(!is.na(Rank2)))))
+
+  # print("ntilde = ")
+  # print(ntilde)
+
+  tempsum <- 0
+  for(i in 1:length(Rank1)){
+    if(is.na(Rank1[i]) | is.na(Rank2[i])){
+      next
+    }
+    for(j in 1:length(Rank1)){
+      if((i==j)| (is.na(Rank1[j]) | is.na(Rank2[j]) )   ){
+        next
+      }
+
+      if(  ((Rank1[i] <= Rank1[j]) & ( Rank2[i] <= Rank2[j] ))  ){
+        tempsum = tempsum + 1
+      }
+      if(  ((Rank1[i] > Rank1[j]) & ( Rank2[i] > Rank2[j] ))  ){
+        tempsum = tempsum + 1
+      }
+
+      if(  ((Rank1[i] > Rank1[j]) & ( Rank2[i] <= Rank2[j] ))  ){
+        tempsum = tempsum - 1
+      }
+      if(  ((Rank1[i] <= Rank1[j]) & ( Rank2[i] > Rank2[j] ))  ){
+        tempsum = tempsum - 1
+      }
+
+    }
+  }
+
+  # print("tempsum = ")
+  # print(tempsum)
+  #
+  # # print("tempsum/(ntilde*(ntilde-1)/2) = ")
+  # # print(tempsum/(ntilde*(ntilde-1)/2))
+  #
+  # print("tempsum/(ntilde*(ntilde-1)) = ")
+  # print(tempsum/(ntilde*(ntilde-1)))
+  #
+  #
+  # print(" (1 - tempsum/(ntilde*(ntilde-1)))  /2 = ")
+  # print((1 - tempsum/(ntilde*(ntilde-1)))  /2 )
+
+  tempres <- (1 - tempsum/(ntilde*(ntilde-1)))  /2
+
+  # This works when there are no ties
+
+  # return( ( 1 - cor(Rank1subvec, Rank2subvec, method = method) )/2 )
+  return( tempres )
+
+  }
+
+
+
+
+
+### kendall tau distance
+#' Compute the Normalized Kendall Tau Distance from two Full Ranking Lists
+#'
+#' @param Rank1 A full ranking list containing the ranks of all the \eqn{N} entities. Note that here we follow the usual definition of rank in R, that is, the larger the evaluation score of an entity, the larger this entity's rank is. Specifically, for a full ranking list of \eqn{N} entities, the rank of an entity equals \eqn{N+1} minus its ranked position.
+#' @param Rank2 Another full ranking list containing the ranks of all the \eqn{N} entities.
+#' @return The normalized Kendall tau distance from the two full ranking lists.
+#' @export
+ModKTau <- function(Rank1, Rank2, method = "kendall"){
+  if(length(Rank1) != length(Rank2)){
+    stop("Rank vectors must be of the same length")
+  }
+  # This works when there are no ties
+
+  if(any(is.na(c(Rank1,Rank2)))){
+    stop("This function is not designed for Ranks with NA values. Please input top K ranks and enter ranks of all items outside top K as K+1.")
+  }
+
+  n.item <- length(Rank1)
+
+
+  tempsum <- 0
+  for(i in 1:length(Rank1)){
+    # if(is.na(Rank1[i]) | is.na(Rank2[i])){
+    #   next
+    # }
+    for(j in 1:length(Rank1)){
+      # if((i==j)| (is.na(Rank1[j]) | is.na(Rank2[j]) )   ){
+      #   next
+      # }
+
+      # if(  ((Rank1[i] <= Rank1[j]) & ( Rank2[i] <= Rank2[j] ))  ){
+      #   tempsum = tempsum + 1
+      # }
+      # if(  ((Rank1[i] > Rank1[j]) & ( Rank2[i] > Rank2[j] ))  ){
+      #   tempsum = tempsum + 1
+      # }
+
+      if(  ((Rank1[i] > Rank1[j]) & ( Rank2[i] < Rank2[j] ))  ){
+        tempsum = tempsum + 1
+      }
+      if(  ((Rank1[i] < Rank1[j]) & ( Rank2[i] > Rank2[j] ))  ){
+        tempsum = tempsum + 1
+      }
+
+    }
+  }
+
+  # print("modified distance = ")
+  # print(tempsum)
+  #
+  # print("modified correlation = ")
+  # print( 1 - 4*tempsum/(n.item *( n.item - 1 ))   )
+
+  modcorr <- 1 - 4*tempsum/(n.item *( n.item - 1 ))
+
+  # print("modified normalized distance = ")
+  # print( (1 - modcorr)/2)
+  # print("Alt calc, modified normalized distance = ")
+  # print( 2*tempsum/(n.item *( n.item - 1 )  ) )
+
+  # return( ( 1 - cor(Rank1subvec, Rank2subvec, method = method) )/2 )
+  return( (1 - modcorr)/2 )
+
+}
+
+
