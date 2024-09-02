@@ -44,13 +44,16 @@ ARRObartNOCovars_fullcond_EmpN_topk(
   beta = 2,
   nu = 3,
   lambda = 0.1,
-  sparse = TRUE,
   no_empty_proposals = FALSE,
   alpha_prior = FALSE,
   sigma_mu_prior = FALSE,
   splitting_rules = "discrete",
   loop_order = "time_in_item",
-  max_bad_trees = 10
+  max_bad_trees = 10,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_split_prior = TRUE
 )
 }
 \arguments{

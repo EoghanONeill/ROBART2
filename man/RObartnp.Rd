@@ -38,7 +38,11 @@ RObartnp(
   c1 = 2,
   c2 = 2,
   alpha_gridsize = 100L,
-  ranker_components = TRUE
+  ranker_components = TRUE,
+  sparse = FALSE,
+  alpha_a_y = 0.5,
+  alpha_b_y = 1,
+  alpha_split_prior = TRUE
 )
 }
 \arguments{

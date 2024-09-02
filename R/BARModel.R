@@ -715,13 +715,16 @@ ARRObartNOCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
                                                 beta = 2,
                                                 nu = 3,
                                                 lambda = 0.1,
-                                                sparse = TRUE,
                                                 no_empty_proposals = FALSE,
                                                 alpha_prior = FALSE,
                                                 sigma_mu_prior = FALSE,
                                                 splitting_rules = "discrete",
                                                 loop_order = "time_in_item",
-                                                max_bad_trees = 10){
+                                                max_bad_trees = 10,
+                                                sparse = TRUE,
+                                                alpha_a_y = 0.5,
+                                                alpha_b_y = 1,
+                                                alpha_split_prior = TRUE){
 
 
   if(!(loop_order %in% c("time_in_item", "item_in_time"))){
@@ -5872,12 +5875,15 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
                                                   beta = 2,
                                                   nu = 3,
                                                   lambda = 0.1,
-                                                  sparse = TRUE,
                                                   no_empty_proposals = FALSE,
                                                   alpha_prior = TRUE,
                                                   sigma_mu_prior = FALSE,
                                                   splitting_rules = "discrete",
-                                                  max_bad_trees = 10){
+                                                  max_bad_trees = 10,
+                                                  sparse = TRUE,
+                                                  alpha_a_y = 0.5,
+                                                  alpha_b_y = 1,
+                                                  alpha_split_prior = TRUE){
 
 
   if(!(splitting_rules %in% c("discrete", "continuous"))){
@@ -9606,13 +9612,16 @@ ARRObartNOCovars_fullcond_EmpN_topk <- function(ranks_mat, # pair.comp.ten,
                                                  beta = 2,
                                                  nu = 3,
                                                  lambda = 0.1,
-                                                 sparse = TRUE,
                                                  no_empty_proposals = FALSE,
                                                  alpha_prior = FALSE,
                                                  sigma_mu_prior = FALSE,
                                                  splitting_rules = "discrete",
                                                  loop_order = "time_in_item",
-                                                 max_bad_trees = 10){
+                                                 max_bad_trees = 10,
+                                                sparse = FALSE,
+                                                alpha_a_y = 0.5,
+                                                alpha_b_y = 1,
+                                                alpha_split_prior = TRUE){
 
 
   if(!(loop_order %in% c("time_in_item", "item_in_time"))){
@@ -14626,12 +14635,15 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
                                                    beta = 2,
                                                    nu = 3,
                                                    lambda = 0.1,
-                                                   sparse = TRUE,
                                                    no_empty_proposals = FALSE,
                                                    alpha_prior = TRUE,
                                                    sigma_mu_prior = FALSE,
                                                    splitting_rules = "discrete",
-                                                   max_bad_trees = 10){
+                                                   max_bad_trees = 10,
+                                                  sparse = FALSE,
+                                                  alpha_a_y = 0.5,
+                                                  alpha_b_y = 1,
+                                                  alpha_split_prior = TRUE){
 
 
   if(!(splitting_rules %in% c("discrete", "continuous"))){
@@ -18292,13 +18304,16 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                  beta = 2,
                                                  nu = 3,
                                                  lambda = 0.1,
-                                                 sparse = TRUE,
                                                  no_empty_proposals = FALSE,
                                                  alpha_prior = FALSE,
                                                  sigma_mu_prior = FALSE,
                                                  splitting_rules = "discrete",
                                                  loop_order = "time_in_item",
-                                                 max_bad_trees = 10){
+                                                 max_bad_trees = 10,
+                                                 sparse = TRUE,
+                                                 alpha_a_y = 0.5,
+                                                 alpha_b_y = 1,
+                                                 alpha_split_prior = TRUE){
 
 
   if(!(loop_order %in% c("time_in_item", "item_in_time"))){
@@ -23289,11 +23304,11 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
                                       num_z_iters = 10,
                                       tree_power = 2,
                                       tree_base = 0.95,
-                                      sparse = FALSE,
+                                      n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                      sparse = TRUE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
-                                      alpha_split_prior = TRUE,
-                                      n.burnin = floor(dim(pair.comp.ten)[1]/2)){
+                                      alpha_split_prior = TRUE){
 
 
   Num_lin_ess_samples <- 100
@@ -25700,12 +25715,15 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                    beta = 2,
                                                    nu = 3,
                                                    lambda = 0.1,
-                                                   sparse = TRUE,
                                                    no_empty_proposals = FALSE,
                                                    alpha_prior = TRUE,
                                                    sigma_mu_prior = FALSE,
                                                    splitting_rules = "discrete",
-                                                   max_bad_trees = 10){
+                                                   max_bad_trees = 10,
+                                                   sparse = TRUE,
+                                                   alpha_a_y = 0.5,
+                                                   alpha_b_y = 1,
+                                                   alpha_split_prior = TRUE){
 
 
   if(!(splitting_rules %in% c("discrete", "continuous"))){
@@ -29385,11 +29403,11 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
                                         itemcovars = FALSE,
                                         tree_power = 2,
                                         tree_base = 0.95,
-                                        sparse = FALSE,
+                                        n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                        sparse = TRUE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
-                                        alpha_split_prior = TRUE,
-                                        n.burnin = floor(dim(pair.comp.ten)[1]/2)){
+                                        alpha_split_prior = TRUE){
 
 
   Num_lin_ess_samples <- 100
@@ -45730,7 +45748,11 @@ RObartnp <- function(pair.comp.ten,
                      c1 = 2,
                      c2 = 2,
                      alpha_gridsize = 100L,
-                     ranker_components = TRUE){
+                     ranker_components = TRUE,
+                     sparse = FALSE,
+                     alpha_a_y = 0.5,
+                     alpha_b_y = 1,
+                     alpha_split_prior = TRUE){
   ## store MCMC draws
 
   # print("begin function")
@@ -45952,7 +45974,26 @@ RObartnp <- function(pair.comp.ten,
 
     weightstemp_y  <- 1/(sigma1_vec_train^2)
 
+    p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
 
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- rep(NA, iter.max)
+      draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+      draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+    }
 
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
@@ -46005,6 +46046,12 @@ RObartnp <- function(pair.comp.ten,
 
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
 
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+
 
     if(ranker_components == FALSE ){
       tempy <- as.vector(Z.mat) - rep(mu1_vec_train,n.ranker)
@@ -46016,6 +46063,15 @@ RObartnp <- function(pair.comp.ten,
     }
 
     sampler$setResponse(y = tempy)
+
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
+
     sampler$setSigma(sigma = 1)
     sampler$setWeights(weights = weightstemp_y)
 
@@ -46027,6 +46083,14 @@ RObartnp <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
+
+
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
 
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -46278,6 +46342,11 @@ RObartnp <- function(pair.comp.ten,
     # print("sigma = ")
     # print(samplestemp$sigma)
 
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
 
 
     if(nrow(X.train)==n.item){
@@ -46320,7 +46389,18 @@ RObartnp <- function(pair.comp.ten,
 
     }
 
+    if (sparse & (iter > floor(n.burnin * 0.5))) {
+      # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+      # s_z <- s_update_z[[1]]
 
+      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+      s_y <- s_update_y[[1]]
+
+      if(alpha_split_prior){
+        # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+      }
+    }
 
     # store value at this iteration
     if(keep_zmat==TRUE){
@@ -46760,7 +46840,14 @@ RObartnp <- function(pair.comp.ten,
     }
 
 
-
+    if(sparse){
+      draw$alpha_s_y_store[iter] <- alpha_s_y
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter,] <- var_count_y
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter,] <- s_y
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -47392,7 +47479,11 @@ RObart_intercepts <- function(pair.comp.ten,
                               num_lags = 1,
                               diff_num_test_rankers = 0,
                               keep_zmat = FALSE,
-                              test_items_ordered = TRUE){
+                              test_items_ordered = TRUE,
+                              sparse = TRUE,
+                              alpha_a_y = 0.5,
+                              alpha_b_y = 1,
+                              alpha_split_prior = TRUE){
   ## store MCMC draws
 
   # print("begin function")
@@ -47516,6 +47607,27 @@ RObart_intercepts <- function(pair.comp.ten,
     }
 
 
+    p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
+
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- rep(NA, iter.max)
+      draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+      draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+    }
+
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -47566,6 +47678,12 @@ RObart_intercepts <- function(pair.comp.ten,
     # sampler$setSigma(sigma = 1)
 
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+
 
     #mu = as.vector( alpha + X.mat %*% beta )
     sampler$sampleTreesFromPrior()
@@ -47573,6 +47691,18 @@ RObart_intercepts <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
+
+
+
+
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
+
 
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -47776,6 +47906,15 @@ RObart_intercepts <- function(pair.comp.ten,
     # sampler$setSigma(sigma = 1)
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
 
+
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+
+
+
     #mu = as.vector( alpha + X.mat %*% beta )
     samplestemp <- sampler$run()
 
@@ -47786,7 +47925,11 @@ RObart_intercepts <- function(pair.comp.ten,
     # print("sigma = ")
     # print(samplestemp$sigma)
 
-
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
 
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
@@ -47843,6 +47986,14 @@ RObart_intercepts <- function(pair.comp.ten,
 
     }
 
+    if(sparse){
+      draw$alpha_s_y_store[iter] <- alpha_s_y
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter,] <- var_count_y
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter,] <- s_y
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -49229,7 +49380,7 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
 
                 for(item_ind in 1:n.item){
                   # temp_z_i <- tempz[item_ind]
-                  temprank_i <- tempranks[item_ind]
+                  # temprank_i <- tempranks[item_ind]
 
                   set1 = which( temppaircomps[item_ind, ] == 1)
                   set0 = which( temppaircomps[item_ind, ] == 0)
