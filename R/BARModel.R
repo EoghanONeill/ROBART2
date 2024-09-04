@@ -48311,10 +48311,10 @@ SoftRObart <- function(pair.comp.ten,
 
 
 
-    mutemp <- sampler_forest$do_gibbs(as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
+    mutemp <- t(sampler_forest$do_gibbs(as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
                                       as.vector(Xmat.train$y),
                                       as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
-                                      1)
+                                      1))
     # mutest <- sampler_forest$do_predict(Xmat.test$x)
 
 
@@ -48483,10 +48483,10 @@ SoftRObart <- function(pair.comp.ten,
 
     sampler_forest$set_sigma(1)
 
-    mutemp <- sampler_forest$do_gibbs(as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
+    mutemp <- t(sampler_forest$do_gibbs(as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
                                       as.vector(Z.mat),
                                       as.matrix(Xmat.train[,2:ncol(Xmat.train)]),
-                                      1)
+                                      1))
 
     # #set the response.
     # #Check that 0 is a reasonable initial value
