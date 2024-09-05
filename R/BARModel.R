@@ -1554,9 +1554,13 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
           # let rows be period zero, and columns be period 1 (2?)
 
-          probmattemp <- matrix(0,
-                                nrow = num_regions,
-                                ncol = num_regions)
+          # probmattemp <- matrix(0,
+          #                       nrow = num_regions,
+          #                       ncol = num_regions)
+
+          logprobmattemp <- matrix(0,
+                                   nrow = num_regions,
+                                   ncol = num_regions)
 
           # loop over period 2 regions into which z_1 can fall
 
@@ -1692,9 +1696,39 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
           tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
 
-          temp_tnorm_probvec <- fastnormdens(temp_ztp1,
-                                             mean = tempmeanfordens,
-                                             sd = 1)
+          bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
+
+          logprobmattemp[, bad_regions] <- -Inf #rep(-Inf,num_regions)
+          tempbounds[bad_regions, 1] <- NA
+          tempbounds[bad_regions, 2] <- NA
+
+          good_regions <- setdiff(1:num_regions, bad_regions)
+
+
+          temp_tnorm_logprobvec <- rep(NA, num_regions)
+          temp_tnorm_logprobvec[good_regions] <- fastlognormdens(temp_ztp1,
+                                                                 mean = tempmeanfordens[good_regions],
+                                                                 sd = 1)
+
+
+          # logprobmattemp[1:num_regions, k_ind] <- temp_tnorm_logprobvec[k_ind] +
+          #   log(intersectmat[1:num_regions,4])
+
+          logprobmattemp[1:num_regions, good_regions] <- outer(log(intersectmat[1:num_regions,4]),
+                                                               temp_tnorm_logprobvec[good_regions],
+                                                               FUN = "+")
+
+
+          tempbounds[good_regions,1] <- pmax(intersectmat[good_regions, 2], temp_lower3)
+          tempbounds[good_regions,2] <- pmin(intersectmat[good_regions, 3], temp_upper3)
+
+          if(any(tempbounds[good_regions,1] >= tempbounds[good_regions,2])){
+            stop(" line 1868 bounds badly defined")
+          }
+
+          # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+          #                                    mean = tempmeanfordens,
+          #                                    sd = 1)
 
 
 
@@ -1702,152 +1736,152 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
           #                                 mean = intersectmat[1:num_regions, 1],
           #                                 sd = 1)
 
-          for(k_ind in 1:num_regions){
-            # obtain mean for truncated normal distribution
-            # temp_mean <- intersectmat[k_ind, 1]
-
-            # want trunc norm probability of latent variable value for item_ind
-            # in period t+1
-
-
-            # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
-            #                               a=temp_lower,
-            #                               b=Inf,
-            #                               mean = temp_mean,
-            #                               sd = 1)
-
-            # temp_tnorm_prob <- fastnormdens(temp_ztp1,
-            #                          mean = temp_mean,
-            #                          sd = 1)
-
-            temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
-
-            # temp_mean <- intersectmat[k_ind, 1]
-
-
-
-            # now second term
-
-
-            temp_lower2 <- intersectmat[k_ind, 2]
-            temp_upper2 <- intersectmat[k_ind, 3]
-
-
-
-
-            # print("temp_lower2 = ")
-            # print(temp_lower2)
-            #
-            # print("temp_lower3 = ")
-            # print(temp_lower3)
-            #
-            # print("temp_upper2 = ")
-            # print(temp_upper2)
-            #
-            # print("temp_upper3 = ")
-            # print(temp_upper3)
-
-
-            if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
-              # intervals do not overlap, therefore assign probability zero
-              # and skip to next iteration
-
-
-              # print("k_ind = ")
-              # print(k_ind)
-
-              # print("ncol(temp_region_probs) = ")
-              # print(ncol(temp_region_probs))
-
-              # print("nrow(temp_region_probs) = ")
-              # print(nrow(temp_region_probs))
-
-
-              # these three lines are technically unnecessary
-              probmattemp[, k_ind] <- rep(0,num_regions)
-              tempbounds[k_ind, 1] <- NA
-              tempbounds[k_ind, 2] <- NA
-
-              next
-
-            }
-
-
-            temp_lower2 <- max(temp_lower2, temp_lower3)
-            temp_upper2 <- min(temp_upper2, temp_upper3)
-
-            if(temp_lower2 > temp_upper2){
-
-              print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
-                                              n.item*(indiv - 1) +
-                                              1:n.item]")
-
-              print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
-                                       n.item*(indiv - 1) +
-                                       1:n.item])
-
-              print("item_ind = ")
-              print(item_ind)
-
-              # print("rankvec_t = ")
-              # print(rankvec_t)
-
-              stop("Line 1581 temp_lower2 > temp_upper2")
-            }
-
-
-            for(k0_ind in 1:num_regions){
-
-              #loop over all possible means
-              temp_mean2 <- intersectmat[k0_ind,1]
-
-              # probability of being in intersection region
-
-              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
-
-
-              # probmattemp[k0_ind, k_ind] <- prob_t_region*
-              #   temp_tnorm_prob *
-              #   intersectmat[k0_ind,4]
-
-              probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
-
-              if(probmattemp[k0_ind, k_ind] <0){
-                print("probmattemp[k0_ind, k_ind] = ")
-                print(probmattemp[k0_ind, k_ind])
-
-                # print("prob_t_region = ")
-                # print(prob_t_region)
-
-                print("temp_tnorm_prob = ")
-                print(temp_tnorm_prob)
-
-                print("intersectmat[k0_ind,4] = ")
-                print(intersectmat[k0_ind,4])
-
-                print("temp_upper2 = ")
-                print(temp_upper2)
-
-                print("temp_lower2 = ")
-                print(temp_lower2)
-
-                print("temp_mean2 = ")
-                print(temp_mean2)
-
-
-              }
-
-
-            } # end loop over k0
-
-            # save upper and lower bounds (mean saved in intersectmat)
-            # or just obtain again later
-
-            tempbounds[k_ind,1] <- temp_lower2
-            tempbounds[k_ind,2] <- temp_upper2
-
-
-          } # end loop over k1
+          # for(k_ind in 1:num_regions){
+          #   # obtain mean for truncated normal distribution
+          #   # temp_mean <- intersectmat[k_ind, 1]
+          #
+          #   # want trunc norm probability of latent variable value for item_ind
+          #   # in period t+1
+          #
+          #
+          #   # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+          #   #                               a=temp_lower,
+          #   #                               b=Inf,
+          #   #                               mean = temp_mean,
+          #   #                               sd = 1)
+          #
+          #   # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+          #   #                          mean = temp_mean,
+          #   #                          sd = 1)
+          #
+          #   temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+          #
+          #   # temp_mean <- intersectmat[k_ind, 1]
+          #
+          #
+          #
+          #   # now second term
+          #
+          #
+          #   temp_lower2 <- intersectmat[k_ind, 2]
+          #   temp_upper2 <- intersectmat[k_ind, 3]
+          #
+          #
+          #
+          #
+          #   # print("temp_lower2 = ")
+          #   # print(temp_lower2)
+          #   #
+          #   # print("temp_lower3 = ")
+          #   # print(temp_lower3)
+          #   #
+          #   # print("temp_upper2 = ")
+          #   # print(temp_upper2)
+          #   #
+          #   # print("temp_upper3 = ")
+          #   # print(temp_upper3)
+          #
+          #
+          #   if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+          #     # intervals do not overlap, therefore assign probability zero
+          #     # and skip to next iteration
+          #
+          #
+          #     # print("k_ind = ")
+          #     # print(k_ind)
+          #
+          #     # print("ncol(temp_region_probs) = ")
+          #     # print(ncol(temp_region_probs))
+          #
+          #     # print("nrow(temp_region_probs) = ")
+          #     # print(nrow(temp_region_probs))
+          #
+          #
+          #     # these three lines are technically unnecessary
+          #     probmattemp[, k_ind] <- rep(0,num_regions)
+          #     tempbounds[k_ind, 1] <- NA
+          #     tempbounds[k_ind, 2] <- NA
+          #
+          #     next
+          #
+          #   }
+          #
+          #
+          #   temp_lower2 <- max(temp_lower2, temp_lower3)
+          #   temp_upper2 <- min(temp_upper2, temp_upper3)
+          #
+          #   if(temp_lower2 > temp_upper2){
+          #
+          #     print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     1:n.item]")
+          #
+          #     print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                              n.item*(indiv - 1) +
+          #                              1:n.item])
+          #
+          #     print("item_ind = ")
+          #     print(item_ind)
+          #
+          #     # print("rankvec_t = ")
+          #     # print(rankvec_t)
+          #
+          #     stop("Line 1581 temp_lower2 > temp_upper2")
+          #   }
+          #
+          #
+          #   for(k0_ind in 1:num_regions){
+          #
+          #     #loop over all possible means
+          #     temp_mean2 <- intersectmat[k0_ind,1]
+          #
+          #     # probability of being in intersection region
+          #
+          #     # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+          #
+          #
+          #     # probmattemp[k0_ind, k_ind] <- prob_t_region*
+          #     #   temp_tnorm_prob *
+          #     #   intersectmat[k0_ind,4]
+          #
+          #     probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+          #
+          #     if(probmattemp[k0_ind, k_ind] <0){
+          #       print("probmattemp[k0_ind, k_ind] = ")
+          #       print(probmattemp[k0_ind, k_ind])
+          #
+          #       # print("prob_t_region = ")
+          #       # print(prob_t_region)
+          #
+          #       print("temp_tnorm_prob = ")
+          #       print(temp_tnorm_prob)
+          #
+          #       print("intersectmat[k0_ind,4] = ")
+          #       print(intersectmat[k0_ind,4])
+          #
+          #       print("temp_upper2 = ")
+          #       print(temp_upper2)
+          #
+          #       print("temp_lower2 = ")
+          #       print(temp_lower2)
+          #
+          #       print("temp_mean2 = ")
+          #       print(temp_mean2)
+          #
+          #
+          #     }
+          #
+          #
+          #   } # end loop over k0
+          #
+          #   # save upper and lower bounds (mean saved in intersectmat)
+          #   # or just obtain again later
+          #
+          #   tempbounds[k_ind,1] <- temp_lower2
+          #   tempbounds[k_ind,2] <- temp_upper2
+          #
+          #
+          # } # end loop over k1
 
 
           #sample a combination of k0 and k1
@@ -1857,10 +1891,20 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
           # print("Line 1621 before sample")
 
+          # region_ind <- sample.int((num_regions^2),
+          #                          size = 1,
+          #                          replace = TRUE,
+          #                          prob = as.vector(probmattemp))
+
+          logprobstemp <- as.vector(logprobmattemp)
+          max_ll <- max(logprobstemp)
+          logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+          probstemp <- exp(logprobstemp - logsumexps)
+
           region_ind <- sample.int((num_regions^2),
                                    size = 1,
                                    replace = TRUE,
-                                   prob = as.vector(probmattemp))
+                                   prob = probstemp)
 
 
           # print("Line 1629 after sample")
@@ -1956,9 +2000,15 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
             # first column is the probabilities
             # second column is the lower bounds
             # third column is the upper bounds
-            temp_region_probs <- matrix(0,
-                                        nrow = nrow(intersectmat),
-                                        ncol = 3)
+            # temp_region_probs <- matrix(0,
+            #                             nrow = nrow(intersectmat),
+            #                             ncol = 3)
+
+
+            temp_region_logprobs <- matrix(-Inf,
+                                           nrow = nrow(intersectmat),
+                                           ncol = 3)
+
 
             # Trunc norm prob of next periods latent value conditional on region
 
@@ -2096,156 +2146,185 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
             tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
 
-            temp_tnorm_probvec <- fastnormdens(temp_ztp1,
-                                               mean = tempmeanfordens,
-                                               sd = 1)
+            # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            #                                    mean = tempmeanfordens,
+            #                                    sd = 1)
 
             # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
             #                                 mean = intersectmat[1:num_regions, 1],
             #                                 sd = 1)
+            bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
 
-            for(k_ind in 1:num_regions){
-              # obtain mean for truncated normal distribution
-              # temp_mean <- intersectmat[k_ind, 1]
+            temp_region_logprobs[bad_regions, 1] <- -Inf
+            temp_region_logprobs[bad_regions, 2] <- NA
+            temp_region_logprobs[bad_regions, 3] <- NA
 
-              # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
-              #                               a=temp_lower,
-              #                               b=Inf,
-              #                               mean = temp_mean,
-              #                               sd = 1)
+            good_regions <- setdiff(1:num_regions, bad_regions)
 
-
-              # temp_tnorm_prob <- fastnormdens(temp_ztp1,
-              #                          mean = temp_mean,
-              #                          sd = 1)
-
-              temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
-
-              # Probability of z_t in intersection of
-              # region k_ind (for period t+1)
-              # and region defined by period t latent variables for other individuals
-              # and rank for period t
+            temp_tnorm_logprobvec <- rep(NA, num_regions)
+            temp_tnorm_logprobvec[good_regions] <- fastlognormdens(temp_ztp1,
+                                                                   mean = tempmeanfordens[good_regions],
+                                                                   sd = 1)
 
 
-              # tildeC_ktminl corresponds to
-              # period t+1 k_ind region intereval
-
-              temp_lower2 <- intersectmat[k_ind, 2]
-              temp_upper2 <- intersectmat[k_ind, 3]
+            temp_region_logprobs[good_regions, 1] <- temp_tnorm_logprobvec[good_regions]
+            temp_region_logprobs[good_regions, 2] <- pmax(intersectmat[good_regions, 2], temp_lower3)
+            temp_region_logprobs[good_regions, 3] <- pmin(intersectmat[good_regions, 3], temp_upper3)
 
 
-
-              # print("temp_lower2 = ")
-              # print(temp_lower2)
-              #
-              # print("temp_upper2 = ")
-              # print(temp_upper2)
-              #
-              # print("temp_lower3 = ")
-              # print(temp_lower3)
-              #
-              # print("temp_upper3 = ")
-              # print(temp_upper3)
-
-
-              if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
-                # intervals do not overlap, therefore assign probability zero
-                # and skip to next iteration
-
-                # print("k_ind = ")
-                # print(k_ind)
-
-                # print("ncol(temp_region_probs) = ")
-                # print(ncol(temp_region_probs))
-
-                # print("nrow(temp_region_probs) = ")
-                # print(nrow(temp_region_probs))
-
-                temp_region_probs[k_ind, 1] <- 0
-                temp_region_probs[k_ind, 2] <- NA
-                temp_region_probs[k_ind, 3] <- NA
-
-
-                next
-              }
-
-
-
-              temp_lower2 <- max(temp_lower2, temp_lower3)
-              temp_upper2 <- min(temp_upper2, temp_upper3)
-
-
-              if(temp_lower2 > temp_upper2){
-
-                print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
-                                              n.item*(indiv - 1) +
-                                              1:n.item]")
-                print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
-                                         n.item*(indiv - 1) +
-                                         1:n.item])
-                print("item_ind = ")
-                print(item_ind)
-
-                print("rankvec_t = ")
-                print(rankvec_t)
-
-
-                print("temp_lower2 = ")
-                print(temp_lower2)
-
-                print("temp_upper2 = ")
-                print(temp_upper2)
-
-                stop("Line 1917. temp_lower2 > temp_upper2")
-              }
-
-
-
-              # probability of being in intersection region
-
-              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
-
-
-              # print("temp_upper2 = ")
-              # print(temp_upper2)
-              # print("temp_lower2 = ")
-              # print(temp_lower2)
-              #
-              # print("temp_mean2 = ")
-              # print(temp_mean2)
-              #
-              #
-              # print("prob_t_region = ")
-              # print(prob_t_region)
-              #
-              # print("temp_tnorm_prob = ")
-              # print(temp_tnorm_prob)
-
-              # prob_t_region <- prob_t_region*temp_tnorm_prob
-              prob_t_region <- temp_tnorm_prob
-
-              # save region probability
-
-              # and save region bounds (or maybe more memory efficient to obtain the region again)
-
-              # must multiply by other previously obtained probabilities
-
-              # print("prob_t_region = ")
-              # print(prob_t_region)
-
-              temp_region_probs[k_ind, 1] <- prob_t_region
-              temp_region_probs[k_ind, 2] <- temp_lower2
-              temp_region_probs[k_ind, 3] <- temp_upper2
-
-
-            }
+            # for(k_ind in 1:num_regions){
+            #   # obtain mean for truncated normal distribution
+            #   # temp_mean <- intersectmat[k_ind, 1]
+            #
+            #   # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+            #   #                               a=temp_lower,
+            #   #                               b=Inf,
+            #   #                               mean = temp_mean,
+            #   #                               sd = 1)
+            #
+            #
+            #   # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+            #   #                          mean = temp_mean,
+            #   #                          sd = 1)
+            #
+            #   temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+            #
+            #   # Probability of z_t in intersection of
+            #   # region k_ind (for period t+1)
+            #   # and region defined by period t latent variables for other individuals
+            #   # and rank for period t
+            #
+            #
+            #   # tildeC_ktminl corresponds to
+            #   # period t+1 k_ind region intereval
+            #
+            #   temp_lower2 <- intersectmat[k_ind, 2]
+            #   temp_upper2 <- intersectmat[k_ind, 3]
+            #
+            #
+            #
+            #   # print("temp_lower2 = ")
+            #   # print(temp_lower2)
+            #   #
+            #   # print("temp_upper2 = ")
+            #   # print(temp_upper2)
+            #   #
+            #   # print("temp_lower3 = ")
+            #   # print(temp_lower3)
+            #   #
+            #   # print("temp_upper3 = ")
+            #   # print(temp_upper3)
+            #
+            #
+            #   if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+            #     # intervals do not overlap, therefore assign probability zero
+            #     # and skip to next iteration
+            #
+            #     # print("k_ind = ")
+            #     # print(k_ind)
+            #
+            #     # print("ncol(temp_region_probs) = ")
+            #     # print(ncol(temp_region_probs))
+            #
+            #     # print("nrow(temp_region_probs) = ")
+            #     # print(nrow(temp_region_probs))
+            #
+            #     temp_region_probs[k_ind, 1] <- 0
+            #     temp_region_probs[k_ind, 2] <- NA
+            #     temp_region_probs[k_ind, 3] <- NA
+            #
+            #
+            #     next
+            #   }
+            #
+            #
+            #
+            #   temp_lower2 <- max(temp_lower2, temp_lower3)
+            #   temp_upper2 <- min(temp_upper2, temp_upper3)
+            #
+            #
+            #   if(temp_lower2 > temp_upper2){
+            #
+            #     print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                                   n.item*(indiv - 1) +
+            #                                   1:n.item]")
+            #     print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                              n.item*(indiv - 1) +
+            #                              1:n.item])
+            #     print("item_ind = ")
+            #     print(item_ind)
+            #
+            #     print("rankvec_t = ")
+            #     print(rankvec_t)
+            #
+            #
+            #     print("temp_lower2 = ")
+            #     print(temp_lower2)
+            #
+            #     print("temp_upper2 = ")
+            #     print(temp_upper2)
+            #
+            #     stop("Line 1917. temp_lower2 > temp_upper2")
+            #   }
+            #
+            #
+            #
+            #   # probability of being in intersection region
+            #
+            #   # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+            #
+            #
+            #   # print("temp_upper2 = ")
+            #   # print(temp_upper2)
+            #   # print("temp_lower2 = ")
+            #   # print(temp_lower2)
+            #   #
+            #   # print("temp_mean2 = ")
+            #   # print(temp_mean2)
+            #   #
+            #   #
+            #   # print("prob_t_region = ")
+            #   # print(prob_t_region)
+            #   #
+            #   # print("temp_tnorm_prob = ")
+            #   # print(temp_tnorm_prob)
+            #
+            #   # prob_t_region <- prob_t_region*temp_tnorm_prob
+            #   prob_t_region <- temp_tnorm_prob
+            #
+            #   # save region probability
+            #
+            #   # and save region bounds (or maybe more memory efficient to obtain the region again)
+            #
+            #   # must multiply by other previously obtained probabilities
+            #
+            #   # print("prob_t_region = ")
+            #   # print(prob_t_region)
+            #
+            #   temp_region_probs[k_ind, 1] <- prob_t_region
+            #   temp_region_probs[k_ind, 2] <- temp_lower2
+            #   temp_region_probs[k_ind, 3] <- temp_upper2
+            #
+            #
+            # }
 
 
             # sample a region using probabilities obtained above
 
             # print("Line 1903 before sample")
 
-            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+            # region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+            if(length(good_regions)==1){
+              region_ind <- good_regions[1]
+            }else{
+              logprobstemp <- as.vector(temp_region_logprobs[good_regions,1])
+              max_ll <- max(logprobstemp)
+              logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+              probstemp <- exp(logprobstemp - logsumexps)
+
+              region_ind <- sample(x = (1:num_regions)[good_regions], size = 1, replace = TRUE, prob = probstemp)
+            }
 
             temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
 
@@ -2260,9 +2339,31 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
             # print("line 2108 temp_mean2 = ")
             # print(temp_mean2)
 
+            # tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/100
+            #
+            # if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
+            #   upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
+            #   lower_buffered <- temp_region_logprobs[region_ind, 2] + tempbuffer
+            #
+            # }else{
+            #   upper_buffered <- temp_region_logprobs[region_ind, 3]
+            #   lower_buffered <- temp_region_logprobs[region_ind, 2]
+            #
+            #
+            #   if(temp_region_logprobs[region_ind, 3] != Inf){
+            #     upper_buffered <- temp_region_logprobs[region_ind, 3] - 0.00001
+            #   }
+            #
+            #   if(temp_region_logprobs[region_ind, 2] != -Inf){
+            #     lower_buffered <- temp_region_logprobs[region_ind, 2] + 0.00001
+            #   }
+            #
+            # }
+
+
             zdraw_temp <- rtruncnorm(n = 1,
-                                     a=temp_region_probs[region_ind, 2],
-                                     b=temp_region_probs[region_ind, 3],
+                                     a=temp_region_logprobs[region_ind, 2],
+                                     b=temp_region_logprobs[region_ind, 3],
                                      mean = temp_mean2_origscale,
                                      sd = 1)
 
@@ -4442,9 +4543,13 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
           # let rows be period zero, and columns be period 1 (2?)
 
-          probmattemp <- matrix(0,
-                                nrow = num_regions_tmin1,
-                                ncol = num_regions)
+          # probmattemp <- matrix(0,
+          #                       nrow = num_regions_tmin1,
+          #                       ncol = num_regions)
+
+          logprobmattemp <- matrix(0,
+                                   nrow = num_regions_tmin1,
+                                   ncol = num_regions)
 
           # loop over period 2 regions into which z_1 can fall
 
@@ -4576,38 +4681,43 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
           #                                     aboverank_ind]
           # }
 
+          temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
+                                                   mean = intersectmat[1:num_regions, 1],
+                                                   sd = 1)
+
 
           for(k_ind in 1:num_regions){
 
 
 
 
-            # obtain mean for truncated normal distribution
-            temp_mean <- intersectmat[k_ind, 1]
-
-            # want trunc norm probability of latent variable value for item_ind
-            # in period t+1
-
-
-            # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
-            #                               a=temp_lower,
-            #                               b=Inf,
-            #                               mean = temp_mean,
-            #                               sd = 1)
-
-            tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
-
-            temp_tnorm_prob <- fastnormdens(temp_ztp1,
-                                            mean = tempmeanfordens,
-                                            sd = 1)
-
+            # # obtain mean for truncated normal distribution
+            # temp_mean <- intersectmat[k_ind, 1]
+            #
+            # # want trunc norm probability of latent variable value for item_ind
+            # # in period t+1
+            #
+            #
+            # # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+            # #                               a=temp_lower,
+            # #                               b=Inf,
+            # #                               mean = temp_mean,
+            # #                               sd = 1)
+            #
+            # tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
+            #
             # temp_tnorm_prob <- fastnormdens(temp_ztp1,
-            #                          mean = temp_mean,
-            #                          sd = 1)
+            #                                 mean = tempmeanfordens,
+            #                                 sd = 1)
+            #
+            # # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+            # #                          mean = temp_mean,
+            # #                          sd = 1)
+            #
+            # temp_mean <- intersectmat[k_ind, 1]
 
-            temp_mean <- intersectmat[k_ind, 1]
 
-
+            temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
 
             # now second term
 
@@ -4647,7 +4757,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
 
               # these three lines are technically unnecessary
-              probmattemp[, k_ind] <- rep(0,num_regions_tmin1)
+              # probmattemp[, k_ind] <- rep(0,num_regions_tmin1)
+              logprobmattemp[, k_ind] <- rep(-Inf,num_regions_tmin1)
               tempbounds[k_ind, 1] <- NA
               tempbounds[k_ind, 2] <- NA
 
@@ -4672,8 +4783,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
               print("item_ind = ")
               print(item_ind)
 
-              print("rankvec_t = ")
-              print(rankvec_t)
+              # print("rankvec_t = ")
+              # print(rankvec_t)
 
               stop("Line 1581 temp_lower2 > temp_upper2")
             }
@@ -4693,33 +4804,36 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
               #   temp_tnorm_prob *
               #   intersectmat_tmin1[k0_ind,4]
 
-              probmattemp[k0_ind, k_ind] <- temp_tnorm_prob *
-                intersectmat_tmin1[k0_ind,4]
+              # probmattemp[k0_ind, k_ind] <- temp_tnorm_prob *
+              #   intersectmat_tmin1[k0_ind,4]
 
-              if(probmattemp[k0_ind, k_ind] <0){
-                print("probmattemp[k0_ind, k_ind] = ")
-                print(probmattemp[k0_ind, k_ind])
+              logprobmattemp[k0_ind, k_ind] <- temp_tnorm_logprob +
+                log(intersectmat_tmin1[k0_ind,4])
 
-                # print("prob_t_region = ")
-                # print(prob_t_region)
-
-                print("temp_tnorm_prob = ")
-                print(temp_tnorm_prob)
-
-                print("intersectmat[k0_ind,4] = ")
-                print(intersectmat[k0_ind,4])
-
-                print("temp_upper2 = ")
-                print(temp_upper2)
-
-                print("temp_lower2 = ")
-                print(temp_lower2)
-
-                print("temp_mean2 = ")
-                print(temp_mean2)
-
-
-              }
+              # if(probmattemp[k0_ind, k_ind] <0){
+              #   print("probmattemp[k0_ind, k_ind] = ")
+              #   print(probmattemp[k0_ind, k_ind])
+              #
+              #   # print("prob_t_region = ")
+              #   # print(prob_t_region)
+              #
+              #   print("temp_tnorm_prob = ")
+              #   print(temp_tnorm_prob)
+              #
+              #   print("intersectmat[k0_ind,4] = ")
+              #   print(intersectmat[k0_ind,4])
+              #
+              #   print("temp_upper2 = ")
+              #   print(temp_upper2)
+              #
+              #   print("temp_lower2 = ")
+              #   print(temp_lower2)
+              #
+              #   print("temp_mean2 = ")
+              #   print(temp_mean2)
+              #
+              #
+              # }
 
 
             } # end loop over k0
@@ -4741,11 +4855,20 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
           # print("Line 1621 before sample")
 
+          # region_ind <- sample.int(num_regions_tmin1*num_regions,
+          #                          size = 1,
+          #                          replace = TRUE,
+          #                          prob = as.vector(probmattemp))
+
+          logprobstemp <- as.vector(logprobmattemp)
+          max_ll <- max(logprobstemp)
+          logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+          probstemp <- exp(logprobstemp - logsumexps)
+
           region_ind <- sample.int(num_regions_tmin1*num_regions,
                                    size = 1,
                                    replace = TRUE,
-                                   prob = as.vector(probmattemp))
-
+                                   prob = as.vector(probstemp))
 
           # print("Line 1629 after sample")
 
@@ -4857,9 +4980,14 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
             # first column is the probabilities
             # second column is the lower bounds
             # third column is the upper bounds
-            temp_region_probs <- matrix(0,
-                                        nrow = nrow(intersectmat),
-                                        ncol = 3)
+            # temp_region_probs <- matrix(0,
+            #                             nrow = nrow(intersectmat),
+            #                             ncol = 3)
+
+            temp_region_logprobs <- matrix(-Inf,
+                                           nrow = nrow(intersectmat),
+                                           ncol = 3)
+
 
             # Trunc norm prob of next periods latent value conditional on region
 
@@ -4992,32 +5120,36 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
             # }
 
 
+            temp_tnorm_logprobvec <- fastlognormdens(temp_ztp1,
+                                                     mean = intersectmat[1:num_regions, 1],
+                                                     sd = 1)
 
             for(k_ind in 1:num_regions){
 
 
 
-              # obtain mean for truncated normal distribution
-              temp_mean <- intersectmat[k_ind, 1]
-
-
-
-              # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
-              #                               a=temp_lower,
-              #                               b=Inf,
-              #                               mean = temp_mean,
-              #                               sd = 1)
-
-              tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
-
-              temp_tnorm_prob <- fastnormdens(temp_ztp1,
-                                              mean = tempmeanfordens,
-                                              sd = 1)
-
+              # # obtain mean for truncated normal distribution
+              # temp_mean <- intersectmat[k_ind, 1]
+              #
+              #
+              #
+              # # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+              # #                               a=temp_lower,
+              # #                               b=Inf,
+              # #                               mean = temp_mean,
+              # #                               sd = 1)
+              #
+              # tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
+              #
               # temp_tnorm_prob <- fastnormdens(temp_ztp1,
-              #                          mean = temp_mean,
-              #                          sd = 1)
+              #                                 mean = tempmeanfordens,
+              #                                 sd = 1)
+              #
+              # # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+              # #                          mean = temp_mean,
+              # #                          sd = 1)
 
+              temp_tnorm_logprob <- temp_tnorm_logprobvec[k_ind]
 
               # Probability of z_t in intersection of
               # region k_ind (for period t+1)
@@ -5059,10 +5191,13 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
                 # print("nrow(temp_region_probs) = ")
                 # print(nrow(temp_region_probs))
 
-                temp_region_probs[k_ind, 1] <- 0
-                temp_region_probs[k_ind, 2] <- NA
-                temp_region_probs[k_ind, 3] <- NA
+                # temp_region_probs[k_ind, 1] <- 0
+                # temp_region_probs[k_ind, 2] <- NA
+                # temp_region_probs[k_ind, 3] <- NA
 
+                temp_region_logprobs[k_ind, 1] <- -Inf
+                temp_region_logprobs[k_ind, 2] <- NA
+                temp_region_logprobs[k_ind, 3] <- NA
 
                 next
               }
@@ -5120,7 +5255,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
               # print(temp_tnorm_prob)
 
               # prob_t_region <- prob_t_region*temp_tnorm_prob
-              prob_t_region <- temp_tnorm_prob
+              # prob_t_region <- temp_tnorm_prob
+              logprob_t_region <- temp_tnorm_logprob
 
               # save region probability
 
@@ -5131,10 +5267,13 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
               # print("prob_t_region = ")
               # print(prob_t_region)
 
-              temp_region_probs[k_ind, 1] <- prob_t_region
-              temp_region_probs[k_ind, 2] <- temp_lower2
-              temp_region_probs[k_ind, 3] <- temp_upper2
+              # temp_region_probs[k_ind, 1] <- prob_t_region
+              # temp_region_probs[k_ind, 2] <- temp_lower2
+              # temp_region_probs[k_ind, 3] <- temp_upper2
 
+              temp_region_logprobs[k_ind, 1] <- logprob_t_region
+              temp_region_logprobs[k_ind, 2] <- temp_lower2
+              temp_region_logprobs[k_ind, 3] <- temp_upper2
 
             }
 
@@ -5142,18 +5281,31 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
             # sample a region using probabilities obtained above
 
             # print("Line 1903 before sample")
+            logprobstemp <- as.vector(temp_region_logprobs[,1])
+            max_ll <- max(logprobstemp)
+            logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
+            probstemp <- exp(logprobstemp - logsumexps)
 
-            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+            region_ind <- sample.int(num_regions, 1, replace = TRUE,
+                                     prob = probstemp)
+
+            # region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
 
             # print("Line 1914 after sample")
 
             temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
 
             zdraw_temp <- rtruncnorm(n = 1,
-                                     a=temp_region_probs[region_ind, 2],
-                                     b=temp_region_probs[region_ind, 3],
+                                     a=temp_region_logprobs[region_ind, 2],
+                                     b=temp_region_logprobs[region_ind, 3],
                                      mean = temp_mean2_origscale,
                                      sd = 1)
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_probs[region_ind, 2],
+            #                          b=temp_region_probs[region_ind, 3],
+            #                          mean = temp_mean2_origscale,
+            #                          sd = 1)
 
             # zdraw_temp <- rtruncnorm(n = 1,
             #                          a=temp_region_probs[region_ind, 2],
