@@ -620,6 +620,5541 @@ interNtreesB <- function(inter_list){
 }
 
 
+
+
+##///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+##///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#' Auto-regressive BART model for Bayesian Analysis of Rank-Order data without  Covariates
+#'
+#' Implement the Bayesian model for rank-order data with at most 1 lag of the latent variable (and filtering and smoothing) and without covariate information.
+#' @import truncnorm
+#' @import mvtnorm
+#' @import dbarts
+#' @import LinConGauss
+#' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{MT} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers and \eqn{T} time periods, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
+#' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param nu.alpha The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param tau2.beta The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param nu.beta The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param iter.max Number of iterations for Gibbs sampler.
+#' @param para.expan ?unused? Logical variable for whether using parameter expansion in the Gibbs sampler.
+#' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @param initial.list List of initial values for the Gibbs sample. If not null, must contain elements named Z.mat and mu.
+#' @param n.trees (dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.
+#' @param n.chains (dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
+#' @param n.threads  (dbarts option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
+#' @param printEvery (dbarts option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
+#' @param printCutoffs (dbarts option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
+#' @param rngKind (dbarts option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
+#' @param rngNormalKind (dbarts option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
+#' @param rngSeed (dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
+#' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
+#' @param num_lags Number of lags of the latent vairable to use as splitting variables.
+#' @param diff_num_test_rankers Equal to 1 if there is a different number of rankers in the test data than in the training data.
+#' @param keep_zmat Boolean. If equal to TRUE output the draws of Zmat for training data and test data
+#' @param noise_in_pred If equal to 1, keep noise in test prediction calculations
+#' @param seq_z_draws deprecated option for drawing latent variable values within MCMC
+#' @param N_hdr number of draws for Holmes-Diaconis-Ross algorithm applied to linearly constrained Gaussians (Algorithm 1 of Gessner et al.). Used for calculation of integrals within sampling of latent variables in MCMC.
+#' @param rho_hdr Rho parameter for Holmes-Diaconis-Ross algorithm applied to linearly constrained Gaussians (Algorithm 1 of Gessner et al.). Used for calculation of integrals within sampling of latent variables in MCMC.
+#' @param smoothing_method Method for sampling the latent variable from the smoothing distribution within MCMC. If "AR", then Accept-Reject sampling. If "MH", then Metropolis-Hastings sampling.
+#' @param num_horizon Number of time periods into the furture to predict ranks.
+#' @param num_z_iters Number of Gibbs iterations for latent outcome z samples per overall MCMC iteration.
+#' @return A list is returned containing the following elements:
+#' \item{mu}{A matrix of dimension n.item.n.ranker.n.time by iter.max. Columns correspond to MCMC iterations. Each column gives direct predictions given the previous lagged draws of Z (no filtering or smoothing, not in agreement with observed ranks). The rows are ordered with all items for ranker 1 in time period 1, then all items for ranker 2 in time period 1, and so on. }
+#' \item{mu_test}{A matrix of dimension n.item.n.ranker.num_horizon by iter.max. Columns correspond to MCMC iterations. Each column gives direct predictions given the previous lagged draws of Z (no filtering or smoothing, not in agreement with observed ranks). The rows are ordered with all items for ranker 1 in the first horizon, then all items for ranker 2 in the first horizon, and so on. }
+#' \item{Z.mat}{A 3d array of dimenions c(n.item, n.ranker*n.time, iter.max). Each slice corresponds to an MCMC iteration. The first n.ranker columns are for all rankers in the first time period. The second n.ranker columns are for the second time period, and so on.}
+#' \item{Z.mat.test}{A 3d array of dimenions c(n.item, n.ranker*num_horizon, iter.max). Each slice corresponds to an MCMC iteration. The first n.ranker columns are for all rankers in the first time horizon. The second n.ranker columns are for the second time horizon, and so on.}
+#' @export
+ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
+                                      # X.train = matrix(NA, nrow =dim(pair.comp.ten)[1], ncol = 0),
+                                      # X.test = matrix(NA, nrow =0, ncol = 0),
+                                      # tau2.alpha = 5^2,
+                                      # nu.alpha = 3,
+                                      # tau2.beta = 5^2,
+                                      # nu.beta = 3,
+                                      n.item = dim(pair.comp.ten)[1],
+                                      n.rankerbytime = dim(pair.comp.ten)[3],
+                                      n.ranker,
+                                      n.time,
+                                      # p.cov = ncol(X.train),
+                                      iter.max = 5000,
+                                      para.expan = TRUE,
+                                      print.opt = 100,
+                                      initial.list = NULL,
+                                      n.trees = 50L,
+                                      n.burn = 0L,
+                                      n.samples = 1L,
+                                      n.thin = 1L,
+                                      n.chains = 1,
+                                      n.threads = 1L,#guessNumCores(),
+                                      printEvery = 100L,
+                                      printCutoffs = 0L,
+                                      rngKind = "default",
+                                      rngNormalKind = "default",
+                                      rngSeed = NA_integer_,
+                                      updateState = TRUE,
+                                      num_lags = 1,
+                                      diff_num_test_rankers = 0,
+                                      keep_zmat = FALSE,
+                                      noise_in_pred = 0,
+                                      seq_z_draws = 1,
+                                      N_hdr = 100,
+                                      rho_hdr = 0.5,
+                                      smoothing_method = "AR",
+                                      num_horizon = 1,
+                                      num_z_iters = 10,
+                                      tree_power = 2,
+                                      tree_base = 0.95,
+                                      n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                      sparse = TRUE,
+                                      alpha_a_y = 0.5,
+                                      alpha_b_y = 1,
+                                      alpha_split_prior = TRUE){
+
+
+  Num_lin_ess_samples <- 100
+  num_test_periods <- num_horizon
+
+  if(num_horizon < 1){
+    stop("num_horizon must be >=1")
+  }
+
+  if(num_lags>1){
+    stop("Code only written for num_lags == 1")
+  }
+
+
+  if(smoothing_method != "AR"){
+    if(smoothing_method != "MH"){
+
+      stop("smoothing_method must equal AR (Accept-Reject) or MH (Metropolis-Hastings)")
+
+    }
+  }
+
+
+  # print("begin function")
+
+  if(!is.integer(num_lags)){
+    stop("num_lags must be an integer.")
+  }
+  if(num_lags <1){
+    stop("num_lags must be an integer greater than or equal to 1.")
+  }
+
+  if(n.rankerbytime!=n.ranker*n.time ){
+    stop("n.rankerbytime != n.ranker*n.time")
+  }
+
+
+  # length_mu <- 1
+  length_mu <- n.item*n.rankerbytime
+
+
+  # if(nrow(X.train)==n.item){
+  #   stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+  #
+  #   length_mu <- n.item
+  # }else{
+  #   if(nrow(X.train)==n.item*n.rankerbytime){
+  #     length_mu <- n.item*n.rankerbytime
+  #   }else{
+  #     stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+  #   }
+  #
+  # }
+
+
+  # length_mu_test <- 1
+
+
+  # if(nrow(X.test) >0 ){
+  #
+  #
+  #   if(diff_num_test_rankers==1){
+  #     stop("Code not yet written for test data with different rankers to training data.")
+  #   }else{
+  #
+  #     if(nrow(X.test) != n.item*n.ranker*num_test_periods ){
+  #       stop("nrow(X.test) != n.item*n.ranker*num_test_periods")
+  #
+  #     }else{
+  #       length_mu_test <- nrow(X.test)
+  #
+  #     }
+  #
+  #
+  #   }
+  #
+  #
+  #
+  #   #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+  #
+  #
+  #
+  #   # if(diff_num_test_rankers==1){
+  #   #   length_mu_test <- nrow(X.test)
+  #   # }else{
+  #   #   if(nrow(X.train)==n.item){
+  #   #     length_mu_test <- n.item*n.ranker
+  #   #
+  #   #   }else{
+  #   #     length_mu_test <- nrow(X.test)
+  #   #
+  #   #   }
+  #   # }
+  # }
+
+
+
+  draw = list(
+    # Z.mat = array(NA, dim = c(n.item, n.ranker*n.time, iter.max)),
+    #alpha = array(NA, dim = c(n.item, iter.max)),
+    #beta = array(NA, dim = c(p.cov, iter.max)),
+    #if the x values do not vary over rankers, then there will only be n.item unique x values
+    mu = array(NA, dim = c(length_mu, iter.max)),#,
+    mu_test = array(NA, dim = c(n.item*n.ranker*num_horizon, iter.max))
+    #
+    #
+    #can have mu of dimension n.item*n.ranker to operationalize rnanker-specific mu values, then need to edit gibbs update of Z
+    #mu = array(NA, dim = c(n.item*n.ranker, iter.max))#,
+    # sigma2.alpha = rep(NA, iter.max),
+    # sigma2.beta = rep(NA, iter.max)
+  )
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat = array(NA, dim = c(n.item, n.ranker*n.time, iter.max))
+    draw$Z.mat.test = array(NA, dim = c(n.item, n.ranker*num_horizon, iter.max))
+  }
+
+  # if(nrow(X.test) >0 ){
+  #   draw$mu_test <- array(NA, dim = c(length_mu_test, iter.max))
+  #
+  #   if(keep_zmat==TRUE){
+  #     draw$Z.mat.test <- array(NA, dim = c(n.item, n.ranker*num_test_periods, iter.max))
+  #   }
+  # }
+
+
+
+  # create observed ranks for constraints
+  # OR EDIT CODE SO THAT INPUT IS RANKS?
+  # can then apply function FullRankToPairComp to create pair.comp.ten
+
+
+  # ranks matrix
+  # number of columns is n.ranker*n.time
+  # number or rows is n.item
+
+  # first M columns are for all rankers in the first time period
+  # next M columns are for all rankers in the second time period
+  # and so on
+
+
+  # ranks_mat <- matrix(NA,
+  #                     ncol = n.ranker*n.time,
+  #                     nrow = n.item )
+  #
+  #
+  # #n.item by n.item
+  #
+  # for(t in 1:n.time){
+  #
+  #   for(indiv in 1:n.ranker){
+  #     pair.comp <- pair.comp.ten[, , (t-1)*n.ranker + indiv]
+  #
+  #     # 1 corresponding to "highest rank" . i.e. highest utility ite,
+  #     # up.order = rowSums( pair.comp, na.rm = TRUE ) + 1
+  #
+  #     # 1 corresponding to "lowest rank". i.e. lowest utility item
+  #
+  #     up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
+  #
+  #
+  #     ranks_mat[, (t-1)*n.ranker + indiv] <- up.order
+  #
+  #   }
+  # }
+  #
+  #
+  # # it might be more efficient to create and save all rank constraint matrices at this stage
+  #
+  #
+  # rank_cons_arr <- array(data = NA,dim = c(n.item - 1, n.item,n.ranker ,  n.time))
+  #
+  # for(indiv in 1:n.ranker){
+  #
+  #   for(t in 1:n.time){
+  #
+  #     rankvec_t <- ranks_mat[,  (t-1)*n.ranker + indiv]
+  #
+  #
+  #     rankconstraint_t <- matrix(0,
+  #                                nrow = n.item - 1,
+  #                                ncol = n.item)
+  #
+  #     # note: ordering of rows is unimportant
+  #     # as long as ordering agrees with the ordering of the mean vector
+  #
+  #     # so can begin by filling in first row
+  #
+  #     #MUST BE EDITED IF ALLOW FOR TIES
+  #     for(rankind in 1:(length(rankvec_t)-1)){
+  #
+  #       rankconstraint_t[rankind, which(rankvec_t == rankind)] <- -1
+  #       rankconstraint_t[rankind, which(rankvec_t == rankind+1)] <- 1
+  #
+  #       # rankconstraint_t[rankind, rankvec_t[rankind]] <- -1
+  #       # rankconstraint_t[rankind, rankvec_t[rankind+1]] <- 1
+  #
+  #     }
+  #
+  #     rank_cons_arr[, , indiv, t] <- rankconstraint_t
+  #
+  #   }
+  # }
+  # # create array of rank constraint matrices
+
+
+
+
+
+
+
+
+
+
+  # arbitrarily set zprior_vec
+  zprior_vec <- rep(0, n.item)
+
+
+  boundconstraints <- matrix(NA,
+                             nrow = 2*n.item,
+                             ncol = n.item)
+
+  # use kroenecker product
+  # there is probably a more efficient way of doing this
+
+  boundconstraints <- diag(1,n.item, n.item) %x% c(1,-1)
+
+
+  # print("Line 670.")
+
+  if(is.null(initial.list)){
+    ## initial values for Z
+    Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker*n.time)
+    for(j in 1:(n.ranker*n.time)){
+
+      pair.comp <- pair.comp.ten[,,j]
+
+      # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+      # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+
+      # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+      # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+
+      # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
+      # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+
+
+      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+      # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
+      # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
+
+    }
+
+
+    Z.mat.test = matrix(NA, nrow = n.item, ncol = n.ranker*num_horizon)
+
+    ## initial values
+    # alpha = rep(0, n.item)
+    # beta = rep(0, p.cov)
+
+    # print("create data matrices for dbarts")
+
+    #create time period 1 initial values for all items and all rankers
+    #[actually these vlaues are not updated at al]
+    #one possibility is all zeros, although then all T1 observations fall in one branc if split on Z
+    # init_Z_t0 <- rep(0, n.item*n.ranker)
+    #another possibility is normally distributed initial values
+    # init_Z_t0 <- rnorm(n.item*n.ranker)
+
+    # with initial value create vector of Z lags
+    # Zlag.1.mat <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-1)*n.item*n.ranker)])
+
+    #must do something similar if extend to two period lags, three period lags etc.
+
+    Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+    for(t in 1:num_lags){
+      init_Z_t0 <- rep(0, t*n.item*n.ranker)
+      # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+      Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+    }
+
+    #it is also necessary to create initial values for the test data
+
+    Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+    # if(nrow(X.test) >0 ){
+    for(t in 1:num_lags){
+      # if(t==1){
+      #   #repeating the last period values
+      #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+      #
+      #   #other option is to set all unobservable values to zero
+      #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+      #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+      #
+      #
+      # }else{
+
+      if(num_test_periods > t ){
+        #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                               rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                                   (num_test_periods-t) )  )
+
+        # #other option is to set all unobservable values to zero
+        # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+        #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+
+      }else{
+        #nothing to fill in if num_test_periods <= t
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+      }
+
+
+      # }
+    }
+    # }
+
+
+    # #must repeat x matrix if only n.item by the number of covaraites
+    # #otherwise, the matrix has ranking specific covariates
+    # if(nrow(X.train)==n.item){
+    #
+    #   stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+    #   #this part of the code needs to be rewritten if code
+    #   #edited to allow for nrow(X.train)==n.item
+    #   #currently the dimensions of the traiinng and test matrices defined below do not agree with this option
+    #
+    #   Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #                                                                               ncol =  ncol(X.train) + num_lags ,
+    #                                                                               byrow = TRUE ))
+    #   )
+    #
+    #
+    #   #colnames(Xmat.train) <- c("y", "x","z","w")
+    #
+    #   if(nrow(X.test) >0 ){
+    #     # print("nrow(X.test) = ")
+    #     # print(nrow(X.test))
+    #
+    #     #Note: Zlag.mat.test already contains vecotrs. Each lag is correctly a separate vector
+    #     #so as.vector is NOT applied here to Zlag.mat.test.
+    #
+    #     Xmat.test <- data.frame(x = cbind(Zlag.mat.test, matrix( rep( t( X.test ) , n.ranker ) ,
+    #                                                              ncol =  ncol(X.test) , byrow = TRUE ) )
+    #     )
+    #     #colnames(Xmat.test) <- c("x","z","w")
+    #
+    #     #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+    #   }
+    #
+    # }else{
+    #   if(nrow(X.train)==n.item*n.ranker*n.time){
+    #     Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat, X.train) )
+    #
+    #     # print(colnames(Xmat.train))
+    #
+    #     if(nrow(X.test)>0 ){
+    #       Xmat.test  <- data.frame(x = cbind( Zlag.mat.test, X.test ) )
+    #
+    #       #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+    #
+    #     }
+    #   }else{
+    #     stop("nrow(X.train) not equal to n.item or n.item*n.ranker")
+    #   }
+    #
+    # }
+
+
+
+    # print("Line 799.")
+
+    df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
+
+    p_y <- ncol(df_for_dbart) - 1 # subtracting 1. outcome is a column of df_for_dbart
+
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- rep(NA, iter.max)
+      draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+      draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+    }
+
+    control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                             keepTrees = TRUE,
+                             n.trees = n.trees,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
+
+
+    # print(colnames(Xmat.train))
+    # print(colnames(Xmat.test))
+
+    # print("begin dbarts")
+
+
+    # if(nrow(X.test )==0){
+    sampler <- dbarts(y ~ .,
+                      data = df_for_dbart,
+                      #test = Xmat.test,
+                      control = control,
+                      resid.prior = fixed(1),
+                      tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
+                      sigma=1 #check if this is the correct approach for setting the variance to 1
+    )
+
+    # }else{
+    #   sampler <- dbarts(y ~ .,
+    #                     data = Xmat.train,
+    #                     test = Xmat.test,
+    #                     control = control,
+    #                     resid.prior = fixed(1), #this was suggested by the dbarts package author. I assume this is sufficient
+    #                     sigma=1 #
+    #   )
+    #
+    # }
+
+    # print("error after dbarts")
+
+    #set the response.
+    #Check that 0 is a reasonable initial value
+    #perhaps makes more sense to use initial values of Z
+    sampler$setResponse(y = as.vector(Z.mat))
+    # sampler$setSigma(sigma = 1)
+
+    min_resp <- min(as.vector(Z.mat))
+    max_resp <- max(as.vector(Z.mat))
+
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+    #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+
+    #mu = as.vector( alpha + X.mat %*% beta )
+    sampler$sampleTreesFromPrior()
+
+
+    samplestemp <- sampler$run()
+
+    mutemp <- samplestemp$train[,1]
+    #suppose there are a number of samples
+
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+
+    # print("sigma = ")
+    # print(samplestemp$sigma)
+
+    # mupreds <- sampler$predict(Xmat.train)
+
+    mu <- mutemp
+
+    #
+    # if(nrow(X.train)==n.item){
+    #   #each n.ranker values of u should be equal,
+    #   #so just take one mu value from each of these
+    #   #this keeps the dimension of mu equal to n.item
+    #   #so a new Gibbs sampler update does not have to be written for Z
+    #   stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #
+    #   # if(mutemp[1]!= mutemp[n.item+1]){
+    #   if(mutemp[n.item+1]!= mutemp[n.item+n.item+1]){
+    #     print("initiating mu")
+    #     print("Xmat.train = ")
+    #     print(Xmat.train)
+    #     print("Z.mat = ")
+    #     print(Z.mat)
+    #
+    #     print("samplestemp$sigma = ")
+    #     print(samplestemp$sigma)
+    #     print("samplestemp$varcount = ")
+    #     print(samplestemp$varcount)
+    #
+    #     print("samplestemp$train[,1] = ")
+    #     print(samplestemp$train[,1])
+    #
+    #     print("n.item = ")
+    #     print(n.item)
+    #     print("mutemp = ")
+    #     print(mutemp)
+    #
+    #     # print("mupreds= ")
+    #     # print(mupreds)
+    #
+    #     stop("mutemp[1]!= mutemp[n.item+1]")
+    #   }
+    #
+    #   #mu = mutemp[(1:n.item)]
+    #   mu = mutemp[n.item+(1:n.item)]
+    #
+    #   #mu = mutemp[(1:n.item)*n.ranker]
+    #
+    # }else{
+    #   if(nrow(X.train)==n.item*n.ranker*n.time){
+    #     mu <- mutemp
+    #   }else{
+    #     stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #   }
+    #
+    # }
+
+
+    ## initial values for sigma2.alpha and sigma2.beta
+    # sigma2.alpha = tau2.alpha
+    # sigma2.beta = tau2.beta
+
+  }else{
+    Z.mat <- initial.list$Z.mat
+    Z.mat.test <- initial.list$Z.mat.test
+
+    # alpha = initial.list$alpha
+    # beta = initial.list$beta
+    mu <- initial.list$mu #as.vector( alpha + X.mat %*% beta )
+    # sigma2.alpha = initial.list$sigma2.alpha
+    # sigma2.beta = initial.list$sigma2.beta
+  }
+
+
+
+  ## store initial value
+  #
+  #   print("Z.mat = ")
+  #   print(Z.mat)
+  #
+  #
+  #   print("dim(draw$Z.mat) = ")
+  #
+  #   print(dim(draw$Z.mat))
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat[,,1] <- Z.mat
+    draw$Z.mat.test[,,1] <- Z.mat.test
+  }
+  # draw$alpha[,1] = alpha
+  # draw$beta[,1] = beta
+  draw$mu[,1] <- mu
+  # draw$sigma2.alpha[1] = sigma2.alpha
+  # draw$sigma2.beta[1] = sigma2.beta
+
+
+  # print("Line 954")
+
+
+  df_for_dbart_test <- data.frame( x = Zlag.mat.test )
+
+
+  if(is.null(initial.list)){
+    # print("samplestemp$test[,1] = ")
+    # print(samplestemp$test[,1])
+
+    # mupreds <- sampler$predict(Xmat.train)
+
+    temp_test_mat <- data.frame(x = as.matrix(df_for_dbart_test[1:(n.item*n.ranker) ,]) ) #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+
+    temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+
+    temp_mu_test <- rep(NA,  nrow(df_for_dbart_test) )
+
+    # print("colnames(temp_test_mat) = ")
+
+    # print(colnames(temp_test_mat))
+
+    for(t1 in 1:num_test_periods){
+      #produce a prediction
+
+      # print("t1 = ")
+      # print(t1)
+      #
+      #
+      # print("colnames(temp_test_mat) = ")
+      # print(colnames(temp_test_mat))
+
+      testpredvec <- sampler$predict(temp_test_mat)
+
+      #fill in temp_test_preds with noise
+
+      if(noise_in_pred==1){
+        temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+      }else{
+        temp_test_preds[ , t1] <- testpredvec
+      }
+
+
+
+      #update temp_test_mat
+      #shift z columns to the right and fill in leftmost column
+
+      #need to rewrite this if want to allow for no observed covariates
+
+      if(num_lags ==1){
+        temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
+                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker), ] )))
+
+      }else{
+        temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
+                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),] )))
+
+      }
+
+      colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+
+      #fill in temp_mu_test without noise
+      temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+
+
+    }
+
+    #also update Zlag.mat.test ?
+    #perhaps this is unnecessary here?
+
+
+    Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+    # if(nrow(X.test) >0 ){
+    for(t in 1:num_lags){
+      # if(t==1){
+      #   #repeating the last period values
+      #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+      #
+      #   #other option is to set all unobservable values to zero
+      #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+      #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+      #
+      #
+      # }else{
+
+      if(num_test_periods > t ){
+        #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+        # print("as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)]")
+        # print(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)])
+        #
+        # print("as.vector(temp_test_mat)")
+        # print(as.vector(as.matrix(temp_test_mat)))
+        #
+        # print("as.vector(temp_test_mat)[1:((num_test_periods - t)*(n.item*n.ranker))  ]")
+        # print(as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ])
+
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                               as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+
+
+
+      }else{
+        #nothing to fill in if num_test_periods <= t
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+      }
+
+
+      # }
+    }
+    # }
+
+
+
+
+    draw$mu_test[,1] <- temp_mu_test
+
+    # draw$mu_test[,1] <- samplestemp$test[,1]
+    if(keep_zmat==TRUE){
+      draw$Z.mat.test[,,1]  <- matrix(data = as.vector(temp_test_preds), nrow = n.item, ncol = n.ranker*num_test_periods)
+    }
+
+  }else{
+    draw$mu_test[,1] <- initial.list$mu_test
+  }
+
+
+
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+
+  ##################### Begin Gibbs sampler ##################################################
+  #//////////////////////////////////////////////////////////////////////////
+  ## Gibbs iteration
+
+  iter <- 2
+  breakcount <- 0
+  while(iter <= iter.max){
+    # for(iter in 2:iter.max){
+
+    Z.matold <- Z.mat
+
+    print("iter = ")
+    print(iter)
+
+    ##################### Sample from the Smoothing Distribution #################################################################
+
+    # Sample from the smoothing distribution at each time period beginning at T
+
+    # loop over individuals/rankers (if there is more than one individual/ranker)
+
+
+    #################### calculate intersection matrices ########################################
+
+    # since there are no covariates, the intersection matrices do not vary across time or individuals
+
+    #### obtain intersection matrices for time period t = 1 ###############
+
+
+
+    # create intersection matrices
+
+
+    intersectmat_tmin1 <- NA
+    list_item_intersectmats_tmin1 <- NA
+
+    # create vector of indices for ranker indiv in time period 1
+
+    # # this part is not really necessary
+    # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+    # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+    # obs_indices <- ind_start:ind_end
+
+    # obs_indices[1] could jsut be replaced by [1] below\
+    # because the only variable is zlag, so the other covariates are not used
+
+
+    list_inter_mats <- list()
+
+    for(i in 1:n.trees){
+
+      treeexample1 <- sampler$getTrees(treeNums = i,
+                                       chainNums = 1,
+                                       sampleNums = 1)
+
+      # rebuilt_tree <- rebuildTree2(treeexample1)
+      rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+
+      #must use covariates for individual indiv at time period t
+
+      # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, as.matrix(df_for_dbart$x[obs_indices[1]]) )
+
+      # list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree$var == -1 , 5:7]
+      list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree[,4] == -1 , 5:7, drop = FALSE]
+
+
+    }
+
+    intersectmat <- interNtreesB(list_inter_mats)
+
+    # print("Line 1146")
+
+    intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
+
+    # print("Line 1150")
+
+
+    # calculate one dimensional integrals
+    for(rowind in 1:nrow(intersectmat)){
+      # ktemp <- nkt_mat[rowind,k_index]
+      # tempmean <- intersectmat[ktemp,1]
+      templower <- intersectmat[rowind,2]
+      tempupper <- intersectmat[rowind,3]
+
+      # ASSUMING PRIOR MEAN ALL ZEROS
+
+      # These are the q0 integrals
+      intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+      # tempintegralval <- tempintegralval*onedim_int
+    }
+
+    intersectmat_tmin1 <- intersectmat
+
+
+
+    num_regions <- nrow(intersectmat)
+
+    # print("Line 1169")
+
+
+    for(z_iter_ind in 1:num_z_iters){
+
+
+      for(indiv in 1:n.ranker){
+
+        # print("indiv = ")
+        # print(indiv)
+        ########### calculate qkt  ########################################
+
+        ########### calculate qkt   for t = 1 ########################################
+
+
+        ### calculate qkt integrals for time period t = 1  ################
+
+        # These integrals are already calculated and saved as intersectmat[ktemp,4]
+
+        for(item_ind in 1:n.item){
+
+
+          #QUESTION: LOOP OVER ITEMS THEN TIME OT TIME THEN ITEMS?
+
+          # loop over items
+
+          # Now loop over time periods
+
+          # special case for t=1
+
+          # probability matrix for sampling elements
+
+          # let rows be period zero, and columns be period 1 (2?)
+
+          probmattemp <- matrix(0,
+                                nrow = num_regions,
+                                ncol = num_regions)
+
+          # loop over period 2 regions into which z_1 can fall
+
+
+          tempbounds <- matrix(NA,
+                               nrow = num_regions,
+                               ncol = 2)
+
+          # Trunc norm prob of next periods latent value conditional on region
+
+          # Create intervals from interval t+1 latent values
+
+          # rankvec_tp1 <- ranks_mat[,  1*n.ranker + indiv]
+          #
+          # # inds for j ranked below i in t+1
+          #
+          #
+          #
+          # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in t+1
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower <- -Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #   temp_lower <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in t+1
+          #
+          # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period t+1
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper <- Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #
+          #   temp_upper <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    aboverank_ind]
+          # }
+
+
+          temp_ztp1 <- as.vector(Z.mat)[1*n.item*n.ranker+
+                                          n.item*(indiv - 1) +
+                                          item_ind]
+
+          temppaircomps <- pair.comp.ten[, , (1-1)*n.ranker + indiv]
+
+          tempz <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                      n.item*(indiv - 1) +
+                                      1:n.item]
+
+          set1 = which( temppaircomps[item_ind, ] == 1)
+          set0 = which( temppaircomps[item_ind, ] == 0)
+
+          if(length(set1) > 0){
+            temp_upper3 = min(tempz[set1])
+          }else{
+            temp_upper3 = Inf
+          }
+
+          if(length(set0) > 0){
+            temp_lower3 = max(tempz[set0])
+          }else{
+            temp_lower3 = -Inf
+          }
+
+          # rankvec_t <- ranks_mat[,  (1-1)*n.ranker + indiv]
+          #
+          # # if(any(order(rankvec_t) !=
+          # #    order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                           n.item*(indiv-1) +
+          # #                           1:n.item])) ){
+          # #
+          # #   # print("order(rankvec_t) = ")
+          # #   # print(order(rankvec_t))
+          # #   #
+          # #   # print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #   #                         n.item*(indiv - 1) +
+          # #   #                         1:n.item])  = ")
+          # #
+          # #   print(order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                                  n.item*(indiv - 1) +
+          # #                                  1:n.item]) )
+          # #
+          # #   # print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #   #                                n.item*(indiv - 1) +
+          # #   #                                1:n.item] = ")
+          # #
+          # #   print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                            n.item*(indiv - 1) +
+          # #                            1:n.item])
+          # #
+          # # }
+          #
+          # # inds for j ranked below i in t
+          #
+          # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in t
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower3 <- -Inf
+          # }else{
+          #   temp_lower3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in t
+          #
+          # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period t
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper3 <- Inf
+          # }else{
+          #   temp_upper3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     aboverank_ind]
+          # }
+
+
+
+          tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+
+          temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+                                             mean = tempmeanfordens,
+                                             sd = 1)
+
+
+
+          # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+          #                                 mean = intersectmat[1:num_regions, 1],
+          #                                 sd = 1)
+
+          for(k_ind in 1:num_regions){
+            # obtain mean for truncated normal distribution
+            # temp_mean <- intersectmat[k_ind, 1]
+
+            # want trunc norm probability of latent variable value for item_ind
+            # in period t+1
+
+
+            # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+            #                               a=temp_lower,
+            #                               b=Inf,
+            #                               mean = temp_mean,
+            #                               sd = 1)
+
+            # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+            #                          mean = temp_mean,
+            #                          sd = 1)
+
+            temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+
+            # temp_mean <- intersectmat[k_ind, 1]
+
+
+
+            # now second term
+
+
+            temp_lower2 <- intersectmat[k_ind, 2]
+            temp_upper2 <- intersectmat[k_ind, 3]
+
+
+
+
+            # print("temp_lower2 = ")
+            # print(temp_lower2)
+            #
+            # print("temp_lower3 = ")
+            # print(temp_lower3)
+            #
+            # print("temp_upper2 = ")
+            # print(temp_upper2)
+            #
+            # print("temp_upper3 = ")
+            # print(temp_upper3)
+
+
+            if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+              # intervals do not overlap, therefore assign probability zero
+              # and skip to next iteration
+
+
+              # print("k_ind = ")
+              # print(k_ind)
+
+              # print("ncol(temp_region_probs) = ")
+              # print(ncol(temp_region_probs))
+
+              # print("nrow(temp_region_probs) = ")
+              # print(nrow(temp_region_probs))
+
+
+              # these three lines are technically unnecessary
+              probmattemp[, k_ind] <- rep(0,num_regions)
+              tempbounds[k_ind, 1] <- NA
+              tempbounds[k_ind, 2] <- NA
+
+              next
+
+            }
+
+
+            temp_lower2 <- max(temp_lower2, temp_lower3)
+            temp_upper2 <- min(temp_upper2, temp_upper3)
+
+            if(temp_lower2 > temp_upper2){
+
+              print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+
+              print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                       n.item*(indiv - 1) +
+                                       1:n.item])
+
+              print("item_ind = ")
+              print(item_ind)
+
+              # print("rankvec_t = ")
+              # print(rankvec_t)
+
+              stop("Line 1581 temp_lower2 > temp_upper2")
+            }
+
+
+            for(k0_ind in 1:num_regions){
+
+              #loop over all possible means
+              temp_mean2 <- intersectmat[k0_ind,1]
+
+              # probability of being in intersection region
+
+              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+              # probmattemp[k0_ind, k_ind] <- prob_t_region*
+              #   temp_tnorm_prob *
+              #   intersectmat[k0_ind,4]
+
+              probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+
+              if(probmattemp[k0_ind, k_ind] <0){
+                print("probmattemp[k0_ind, k_ind] = ")
+                print(probmattemp[k0_ind, k_ind])
+
+                # print("prob_t_region = ")
+                # print(prob_t_region)
+
+                print("temp_tnorm_prob = ")
+                print(temp_tnorm_prob)
+
+                print("intersectmat[k0_ind,4] = ")
+                print(intersectmat[k0_ind,4])
+
+                print("temp_upper2 = ")
+                print(temp_upper2)
+
+                print("temp_lower2 = ")
+                print(temp_lower2)
+
+                print("temp_mean2 = ")
+                print(temp_mean2)
+
+
+              }
+
+
+            } # end loop over k0
+
+            # save upper and lower bounds (mean saved in intersectmat)
+            # or just obtain again later
+
+            tempbounds[k_ind,1] <- temp_lower2
+            tempbounds[k_ind,2] <- temp_upper2
+
+
+          } # end loop over k1
+
+
+          #sample a combination of k0 and k1
+          # if necessary can use column sums to sample k1, then k0
+          # however, this is probably unnecessary
+
+
+          # print("Line 1621 before sample")
+
+          region_ind <- sample.int((num_regions^2),
+                                   size = 1,
+                                   replace = TRUE,
+                                   prob = as.vector(probmattemp))
+
+
+          # print("Line 1629 after sample")
+
+          # k0 region is sampled number modulo number of regions
+          k0_region_ind <- (region_ind - 1) %% num_regions + 1
+          # if(k0_region_ind ==0){
+          #   k0_region_ind <- num_regions
+          # }
+
+          # k1 region is the ceiling of sampled number divided by number of regions
+          # k1_region_ind <- ceiling(region_ind/num_regions)
+          k1_region_ind <- (region_ind - 1) %/% num_regions + 1
+
+
+          # print("k1_region_ind = ")
+          # print(k1_region_ind)
+
+          temp_lower2 <- tempbounds[k1_region_ind,1]
+          temp_upper2 <- tempbounds[k1_region_ind,2]
+
+          # print("num_regions = ")
+          # print(num_regions)
+          #
+          # print("region_ind = ")
+          # print(region_ind)
+          #
+          # print("k0_region_ind = ")
+          # print(k0_region_ind)
+
+          temp_mean0 <- intersectmat[k0_region_ind, 1]
+          temp_mean0 <- (temp_mean0 + 0.5)*(max_resp - min_resp) + min_resp
+
+          # print("temp_mean0 = ")
+          # print(temp_mean0)
+          #
+          # print("temp_lower2 = ")
+          # print(temp_lower2)
+          #
+          # print("temp_upper2 = ")
+          # print(temp_upper2)
+
+          zdraw_temp <- rtruncnorm(n = 1,
+                                   a = temp_lower2,
+                                   b = temp_upper2,
+                                   mean = temp_mean0,
+                                   sd = 1)
+
+
+          Z.mat[item_ind,  indiv ] <- zdraw_temp
+
+
+          # loop over time periods for general case 1 < t < T
+
+          for(t in 2:(n.time - 1)){
+
+            temp_ztpmin1 <- as.vector(Z.mat)[(t-2)*n.item*n.ranker+
+                                               n.item*(indiv - 1) +
+                                               item_ind]
+
+
+            # must find mean corresponding to z in period t-1
+            # This will be used in and after the loop over regions.
+            # can directly obtain from dbarts
+            # or find region
+            # and use already saved region mean values
+
+
+            # must find last lower bound that temp_ztpmin1 is greater than
+            # or first upper bound that temp_ztpmin1 is below
+            ktemp_tmin1 <- which((temp_ztpmin1 < intersectmat[, 3]) )[1]
+            # Then obtain the corresponding region mean value
+            temp_mean2 <- intersectmat[ktemp_tmin1,1]
+
+            # print("temp_mean2 = ")
+            # print(temp_mean2)
+            #
+            # print("ktemp_tmin1 = ")
+            # print(ktemp_tmin1)
+
+
+
+            # Calculate the probabilities for each region in this time period
+            # the regions being looped over are actually period t+1 regions
+
+            # Same regions for all time periods if there are no time varying covariates
+
+            # However, the weights are individual and time period specific
+
+            # loop through regions
+
+
+            # first column is the probabilities
+            # second column is the lower bounds
+            # third column is the upper bounds
+            temp_region_probs <- matrix(0,
+                                        nrow = nrow(intersectmat),
+                                        ncol = 3)
+
+            # Trunc norm prob of next periods latent value conditional on region
+
+            # Create intervals from interval t+1 latent values
+
+            # rankvec_tp1 <- ranks_mat[,  (t)*n.ranker + indiv]
+            #
+            # # inds for j ranked below i in t+1
+            #
+            # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t+1
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower <- -Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #   temp_lower <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t+1
+            #
+            # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t+1
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper <- Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #
+            #   temp_upper <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    aboverank_ind]
+            # }
+
+
+            # want trunc norm probability of latent variable value for item_ind
+            # in period t+1
+
+            temp_ztp1 <- as.vector(Z.mat)[t*n.item*n.ranker+
+                                            n.item*(indiv - 1) +
+                                            item_ind]
+
+
+            temppaircomps <- pair.comp.ten[, , (t-1)*n.ranker + indiv]
+
+            tempz <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                        n.item*(indiv - 1) +
+                                        1:n.item]
+
+            set1 = which( temppaircomps[item_ind, ] == 1)
+            set0 = which( temppaircomps[item_ind, ] == 0)
+
+            if(length(set1) > 0){
+              temp_upper3 = min(tempz[set1])
+            }else{
+              temp_upper3 = Inf
+            }
+
+            if(length(set0) > 0){
+              temp_lower3 = max(tempz[set0])
+            }else{
+              temp_lower3 = -Inf
+            }
+
+
+
+            # rankvec_t <- ranks_mat[,  (t-1)*n.ranker + indiv]
+            #
+            #
+            #
+            # # if(any(order(rankvec_t) !=
+            # #    order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                           n.item*(indiv - 1) +
+            # #                           1:n.item]) )){
+            # #
+            # #   print("order(rankvec_t) = ")
+            # #   print(order(rankvec_t))
+            # #
+            # #   print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            # #                         n.item*(indiv - 1) +
+            # #                         1:n.item])  = ")
+            # #
+            # #   print(order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                                  n.item*(indiv - 1) +
+            # #                                  1:n.item]) )
+            # #
+            # #   print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                                n.item*(indiv - 1) +
+            # #                                1:n.item] = ")
+            # #
+            # #   print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                            n.item*(indiv - 1) +
+            # #                            1:n.item])
+            # #
+            # #
+            # # }
+            #
+            #
+            #
+            #
+            #
+            # # inds for j ranked below i in t
+            #
+            # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower3 <- -Inf
+            # }else{
+            #   temp_lower3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                                     n.item*(indiv - 1) +
+            #                                     belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t
+            #
+            # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper3 <- Inf
+            # }else{
+            #   temp_upper3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                                     n.item*(indiv - 1) +
+            #                                     aboverank_ind]
+            # }
+
+            tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+
+            temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+                                               mean = tempmeanfordens,
+                                               sd = 1)
+
+            # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
+            #                                 mean = intersectmat[1:num_regions, 1],
+            #                                 sd = 1)
+
+            for(k_ind in 1:num_regions){
+              # obtain mean for truncated normal distribution
+              # temp_mean <- intersectmat[k_ind, 1]
+
+              # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+              #                               a=temp_lower,
+              #                               b=Inf,
+              #                               mean = temp_mean,
+              #                               sd = 1)
+
+
+              # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+              #                          mean = temp_mean,
+              #                          sd = 1)
+
+              temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
+
+              # Probability of z_t in intersection of
+              # region k_ind (for period t+1)
+              # and region defined by period t latent variables for other individuals
+              # and rank for period t
+
+
+              # tildeC_ktminl corresponds to
+              # period t+1 k_ind region intereval
+
+              temp_lower2 <- intersectmat[k_ind, 2]
+              temp_upper2 <- intersectmat[k_ind, 3]
+
+
+
+              # print("temp_lower2 = ")
+              # print(temp_lower2)
+              #
+              # print("temp_upper2 = ")
+              # print(temp_upper2)
+              #
+              # print("temp_lower3 = ")
+              # print(temp_lower3)
+              #
+              # print("temp_upper3 = ")
+              # print(temp_upper3)
+
+
+              if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+                # intervals do not overlap, therefore assign probability zero
+                # and skip to next iteration
+
+                # print("k_ind = ")
+                # print(k_ind)
+
+                # print("ncol(temp_region_probs) = ")
+                # print(ncol(temp_region_probs))
+
+                # print("nrow(temp_region_probs) = ")
+                # print(nrow(temp_region_probs))
+
+                temp_region_probs[k_ind, 1] <- 0
+                temp_region_probs[k_ind, 2] <- NA
+                temp_region_probs[k_ind, 3] <- NA
+
+
+                next
+              }
+
+
+
+              temp_lower2 <- max(temp_lower2, temp_lower3)
+              temp_upper2 <- min(temp_upper2, temp_upper3)
+
+
+              if(temp_lower2 > temp_upper2){
+
+                print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+                print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                         n.item*(indiv - 1) +
+                                         1:n.item])
+                print("item_ind = ")
+                print(item_ind)
+
+                print("rankvec_t = ")
+                print(rankvec_t)
+
+
+                print("temp_lower2 = ")
+                print(temp_lower2)
+
+                print("temp_upper2 = ")
+                print(temp_upper2)
+
+                stop("Line 1917. temp_lower2 > temp_upper2")
+              }
+
+
+
+              # probability of being in intersection region
+
+              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+              # print("temp_upper2 = ")
+              # print(temp_upper2)
+              # print("temp_lower2 = ")
+              # print(temp_lower2)
+              #
+              # print("temp_mean2 = ")
+              # print(temp_mean2)
+              #
+              #
+              # print("prob_t_region = ")
+              # print(prob_t_region)
+              #
+              # print("temp_tnorm_prob = ")
+              # print(temp_tnorm_prob)
+
+              # prob_t_region <- prob_t_region*temp_tnorm_prob
+              prob_t_region <- temp_tnorm_prob
+
+              # save region probability
+
+              # and save region bounds (or maybe more memory efficient to obtain the region again)
+
+              # must multiply by other previously obtained probabilities
+
+              # print("prob_t_region = ")
+              # print(prob_t_region)
+
+              temp_region_probs[k_ind, 1] <- prob_t_region
+              temp_region_probs[k_ind, 2] <- temp_lower2
+              temp_region_probs[k_ind, 3] <- temp_upper2
+
+
+            }
+
+
+            # sample a region using probabilities obtained above
+
+            # print("Line 1903 before sample")
+
+            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+            temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+            # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
+            #
+            # print("line 2102 temp_mean2_debug from predict = ")
+            # print(temp_mean2_debug)
+            #
+            # print("line 2105 temp_mean2_origscale = ")
+            # print(temp_mean2_origscale)
+            #
+            # print("line 2108 temp_mean2 = ")
+            # print(temp_mean2)
+
+            zdraw_temp <- rtruncnorm(n = 1,
+                                     a=temp_region_probs[region_ind, 2],
+                                     b=temp_region_probs[region_ind, 3],
+                                     mean = temp_mean2_origscale,
+                                     sd = 1)
+
+
+            # print("Line 1914 after sample")
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_probs[region_ind, 2],
+            #                          b=temp_region_probs[region_ind, 3],
+            #                          mean = temp_mean2,
+            #                          sd = 1)
+
+
+
+            Z.mat[item_ind, (t - 1)*n.ranker + indiv ] <- zdraw_temp
+
+
+
+          } # end loop over time periods
+
+          # check for special cases for n.time - 1, n.time - 2, n.time - 3
+
+          # special case for t = n.time
+
+
+          temp_ztpmin1 <- as.vector(Z.mat)[(n.time-2)*n.item*n.ranker+
+                                             n.item*(indiv - 1) +
+                                             item_ind]
+
+
+          # must find mean corresponding to z in period t-1
+          # This will be used in and after the loop over regions.
+          # can directly obtain from dbarts
+          # or find region
+          # and use already saved region mean values
+
+
+          # must find last lower bound that temp_ztpmin1 is greater than
+          # for first upper bound that temp_ztpmin1 is below
+          ktemp_tmin1 <- which(temp_ztpmin1 < intersectmat[, 3])[1]
+          # Then obtain the corresponding region mean value
+          temp_mean2 <- intersectmat[ktemp_tmin1,1]
+
+          # now find interval
+
+
+          # tildeC_ktminl corresponds to
+          # period t+1 k_ind region intereval
+
+          temppaircomps <- pair.comp.ten[, , (n.time-1)*n.ranker + indiv]
+
+          tempz <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+                                      n.item*(indiv - 1) +
+                                      1:n.item]
+
+          set1 = which( temppaircomps[item_ind, ] == 1)
+          set0 = which( temppaircomps[item_ind, ] == 0)
+
+          if(length(set1) > 0){
+            temp_upper3 = min(tempz[set1])
+          }else{
+            temp_upper3 = Inf
+          }
+
+          if(length(set0) > 0){
+            temp_lower3 = max(tempz[set0])
+          }else{
+            temp_lower3 = -Inf
+          }
+
+          # rankvec_t <- ranks_mat[,  (n.time-1)*n.ranker + indiv]
+          #
+          # # inds for j ranked below i in T
+          #
+          # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in T
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower3 <- -Inf
+          # }else{
+          #   temp_lower3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in T
+          #
+          # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period T
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper3 <- Inf
+          # }else{
+          #
+          #   temp_upper3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     aboverank_ind]
+          # }
+
+
+          temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+          # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
+          #
+          # print("line 2202 temp_mean2_debug from predict = ")
+          # print(temp_mean2_debug)
+          #
+          # print("line 2205 temp_mean2_origscale = ")
+          # print(temp_mean2_origscale)
+          #
+          # print("line 2208 temp_mean2 = ")
+          # print(temp_mean2)
+
+          zdraw_temp <- rtruncnorm(n = 1,
+                                   a = temp_lower3,
+                                   b = temp_upper3,
+                                   mean = temp_mean2_origscale,
+                                   sd = 1)
+
+
+          # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower3,
+          #                          b = temp_upper3,
+          #                          mean = temp_mean2,
+          #                          sd = 1)
+
+
+          Z.mat[item_ind, (n.time -1)*n.ranker + indiv ] <- zdraw_temp
+
+
+
+
+
+        } # end loop over items
+
+
+
+      } # end loop over individuals indiv in 1:n.ranker
+
+    }
+
+
+
+
+    # print("Line 4843")
+
+
+    ##################### Old Code for Latent outcome samples ##################################################################
+    #
+    #
+    #     if(nrow(X.train)==n.item){
+    #       stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #
+    #       #each n.ranker values of u should be equal,
+    #       #so just take one mu value from each of these
+    #       #this keeps the dimension of mu equal to n.item
+    #       #so a new Gibbs sampler update does not have to be written for Z
+    #       Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
+    #                                            weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
+    #
+    #       if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+    #
+    #     }else{
+    #       if(nrow(X.train)==n.item*n.ranker*n.time){
+    #
+    #         if(seq_z_draws==1){
+    #           for(t in 1:n.time){
+    #
+    #             # update mu for period t-1
+    #
+    #             #Zlag always zero in period t==0
+    #
+    #             # Z in period 0 is unaffected since set to zero by default
+    #             #thereofre mu unaffected in period 0 (can draw anyway for now)
+    #
+    #             if(t==1){
+    #
+    #               # print("t = ")
+    #               # print(t)
+    #               # print("mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] = ")
+    #               # print(mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)])
+    #
+    #               mu[1:(n.item*n.ranker)] <- samplestemp$train[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker),1]  #sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #               # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #               #                                                                             ncol =  ncol(X.train) + num_lags ,
+    #               #                                                                             byrow = TRUE )))
+    #               # mu[1:(n.item*n.ranker)] <- sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #
+    #             }else{
+    #               mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] <-  samplestemp$train[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker),1] # sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #
+    #               # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #               #                                                                             ncol =  ncol(X.train) + num_lags ,
+    #               #                                                                             byrow = TRUE )))
+    #               # mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] <-  sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #             }
+    #
+    #
+    #
+    #             Z.mat[,(t-1)*n.ranker + 1:n.ranker] <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten[, , (t-1)*n.ranker + 1:n.ranker],
+    #                                                                                     Z.mat = Z.mat[,(t-1)*n.ranker + 1:n.ranker],
+    #                                                                                     mu = mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)],
+    #                                                                                     weight.vec = rep(1, n.ranker),
+    #                                                                                     n.ranker = n.ranker,
+    #                                                                                     n.item = n.item)
+    #
+    #             #update mu for period t to be used as lag for next period
+    #             #require that this is consistent with the tree structure
+    #
+    #
+    #             Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+    #
+    #             for(t1 in 1:num_lags){
+    #               init_Z_t0 <- rep(0, t1*n.item*n.ranker)
+    #               # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+    #
+    #               Zlag.mat[,t1] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t1)*n.item*n.ranker)])
+    #
+    #             }
+    #
+    #             condition <- 1
+    #
+    #             for(j in 1:num_lags){
+    #               # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #               #perhaos this can be edited so that only the relevant time period is updated withinthte lag vector
+    #               condition <- condition*(1-(sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE))
+    #
+    #             }
+    #             while (condition==0) {
+    #               # print("t = ")
+    #               # print(t)
+    #               # print("new z values not consistent with tree structure, must draw again")
+    #
+    #
+    #               #perhaps this can be rewritten to just re-draw the relevant column?
+    #               Z.mat[,(t-1)*n.ranker + 1:n.ranker] <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten[, , (t-1)*n.ranker + 1:n.ranker],
+    #                                                                                       Z.mat = Z.mat[,(t-1)*n.ranker + 1:n.ranker],
+    #                                                                                       mu = mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)],
+    #                                                                                       weight.vec = rep(1, n.ranker),
+    #                                                                                       n.ranker = n.ranker,
+    #                                                                                       n.item = n.item )
+    #
+    #               Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+    #
+    #               for(t1 in 1:num_lags){
+    #                 init_Z_t0 <- rep(0, t1*n.item*n.ranker)
+    #                 # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+    #
+    #                 Zlag.mat[,t1] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t1)*n.item*n.ranker)])
+    #
+    #               }
+    #
+    #               condition <- 1
+    #
+    #               for(j in 1:num_lags){
+    #                 # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #                 #perhaos this can be edited so that only the relevant time period is updated withinthte lag vector
+    #                 condition <- condition*(1-(sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE))
+    #
+    #               }
+    #
+    #
+    #
+    #             }
+    #           }#end of loop over t
+    #
+    #           #end of seq_z_draws==1 code
+    #         }else{
+    #           Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
+    #                                                     Z.mat = Z.mat,
+    #                                                     mu = mu,
+    #                                                     weight.vec = rep(1, n.ranker*n.time),
+    #                                                     n.ranker = n.ranker*n.time,
+    #                                                     n.item = n.item )
+    #
+    #         }
+    #
+    #
+    #       }else{
+    #         stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #       }
+    #     }
+
+    ##################### END Old Code for Latent outcome samples ##################################################################
+
+
+    # print("Line 4424")
+
+    # update training and test data Z values
+
+    #training data update is straightforward, just use new draws of Z.mat
+    Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+    for(t in 1:num_lags){
+      init_Z_t0 <- rep(0, t*n.item*n.ranker)
+      # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+      Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+    }
+
+
+
+    #update test data later in code?
+
+    #test data update requires predictions of mu in test data and noise added to these predictions.
+    #in addition to using the new Zmat values
+
+    # Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+    #
+    # if(nrow(X.test) >0 ){
+    #
+    #   #two options
+    #   #use predictions of unobservable Z lag values from previous iteration
+    #   #or iterate through to obtain new predictions.
+    #   draw$mu_test[,iter-1]
+    #
+    #   for(t in 1:num_lags){
+    #     # if(t==1){
+    #     #   #repeating the last period values
+    #     #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+    #     #
+    #     #   #other option is to set all unobservable values to zero
+    #     #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #     #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     #
+    #     #
+    #     # }else{
+    #
+    #     if(num_test_periods > t ){
+    #       #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+    #
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                                  (num_test_periods-t) )  )
+    #
+    #       #other option is to set all unobservable values to zero
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     }else{
+    #       #nothing to fill in if num_test_periods <= t
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+    #
+    #     }
+    #
+    #
+    #     # }
+    #   }
+    # }
+
+    # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    #
+    # temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+    #
+    # temp_mu_test <- rep(NA,  nrow(Xmat.test) )
+    #
+    # for(t1 in 1:num_test_periods){
+    #   #produce a prediction
+    #   testpredvec <- sampler$predict(as.data.frame(temp_test_mat))
+    #
+    #   #fill in temp_test_preds with noise
+    #   temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+    #
+    #
+    #   #update temp_test_mat
+    #   #shift z columns to the right and fill in leftmost column
+    #
+    #   #need to rewrite this if want to allow for no observed covariates
+    #
+    #   temp_test_mat <-  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] )
+    #
+    #
+    #
+    #   #fill in temp_mu_test without noise
+    #   temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+    #
+    #
+    # }
+    #
+    # #also update Zlag.mat.test ?
+    # #perhaps this is unnecessary here?
+    #
+    #
+    # Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+    #
+    # if(nrow(X.test) >0 ){
+    #   for(t in 1:num_lags){
+    #     # if(t==1){
+    #     #   #repeating the last period values
+    #     #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+    #     #
+    #     #   #other option is to set all unobservable values to zero
+    #     #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #     #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     #
+    #     #
+    #     # }else{
+    #
+    #     if(num_test_periods > t ){
+    #       #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+    #
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              as.vector(temp_test_mat)[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+    #
+    #
+    #
+    #     }else{
+    #       #nothing to fill in if num_test_periods <= t
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+    #
+    #     }
+    #
+    #
+    #     # }
+    #   }
+    # }
+
+
+
+
+
+    #THEN use SetPredictor
+
+    # if (i <= n_warmup) {
+    #   for(j in 1:num_lags){
+    #     sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #     }
+    # } else{
+
+    temp_break <- 0
+    for(j in 1:num_lags){
+      # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+
+      while (sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE) {
+
+        if(seq_z_draws==1){
+          stop("updates still not consistent with tree structure")
+        }
+        print("new z values not consistent with tree structure, must draw again")
+
+        # If this error message occurs
+        # Check the conditions in the dbart package for setPredictor == FALSE
+        # And if this is hypothetically possible, even with draws from the smoothing distribution,
+        # and if it is not a bug
+        # then need to go back to beginning of this iteration of the Gibbs sampler
+        # and sample Zmat again
+
+
+        temp_break <- 1
+        break
+        # stop("new z values not consistent with tree structure, must draw again")
+
+
+        # #perhaps this can be rewritten to just re-draw the relevant column?
+        # Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
+        #                                           Z.mat = Z.mat,
+        #                                           mu = mu,
+        #                                           weight.vec = rep(1, n.ranker*n.time),
+        #                                           n.ranker = n.ranker*n.time,
+        #                                           n.item = n.item )
+        #
+        # Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+        #
+        # for(t in 1:num_lags){
+        #   init_Z_t0 <- rep(0, t*n.item*n.ranker)
+        #   # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+        #
+        #   Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+        #
+        # }
+        #
+        # #check that Zmat and  Zlag.mat are updated outside the while loop and for-loop over j
+
+      }
+
+      if(temp_break==1){
+        break
+      }
+    }
+
+    # if need to draw z values again, go back to start of loop
+    if(temp_break==1){
+      if(breakcount == 10){
+        Z.mat <- Z.matold
+        Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+        for(t in 1:num_lags){
+          init_Z_t0 <- rep(0, t*n.item*n.ranker)
+          # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+          Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+        }
+
+      }else{
+        breakcount <- breakcount +1
+        next
+      }
+
+    }
+
+    breakcount <- 0
+
+
+    # }
+
+    # if(nrow(X.test)>0){
+    #
+    #
+    #   for(j in 1:num_lags){
+    #
+    #     #perhaps this should be removed for when Z is updated properly below
+    #     sampler$setTestPredictor(x = Zlag.mat.test[,j], column = j)
+    #
+    #   }
+    #
+    # }
+
+    #//////////////////////////////////////////////////////////////////////////
+    #
+    #
+    #
+    #//////////////////////////////////////////////////////////////////////////
+
+    # update Z.mat given (alpha, beta) or equivalently mu
+
+    # update (alpha, beta) or equivalently mu
+    # omitting the theta step for now,
+    # although this would ideally be edited for BART and included to speed up convergence
+
+
+
+    #
+    # mean.para.update = GibbsUpMuGivenLatentGroup(Z.mat = Z.mat, X.mat = X.mat, weight.vec = rep(1, n.ranker),
+    #                                              sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+    #                                              n.ranker = n.ranker, n.item = n.item,
+    #                                              p.cov = p.cov, para.expan = para.expan)
+    #
+    #     ### for check only
+    #     Z.mat = Z.mat/mean.para.update$theta
+    #
+    #     alpha = mean.para.update$alpha
+    #     beta = mean.para.update$beta
+
+    # mu = as.vector( alpha + X.mat %*% beta )
+    #
+    # # update hyper para sigma2.alpha and sigma2.beta
+    # sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+    # if(p.cov > 0){
+    #   sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+    # }
+
+    ##################### Sample sum-of-trees ##################################################
+
+
+    #set the response.
+    #Check that 0 is a reasonable initial value
+    #perhaps makes more sense to use initial values of Z
+    sampler$setResponse(y = as.vector(Z.mat))
+    # sampler$setSigma(sigma = 1)
+    #sampler$setPredictor(x= df_for_dbart$x, column = 1, forceUpdate = TRUE)
+
+    min_resp <- min(as.vector(Z.mat))
+    max_resp <- max(as.vector(Z.mat))
+
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+    #mu = as.vector( alpha + X.mat %*% beta )
+    samplestemp <- sampler$run()
+
+    mutemp <- samplestemp$train[,1]
+    #suppose there are a number of samples
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+    # mutemp <- sampler$predict(df_for_dbart)
+    # print("sigma = ")
+    # print(samplestemp$sigma)
+
+    mu = mutemp
+
+
+    if (sparse & (iter > floor(n.burnin * 0.5))) {
+      # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+      # s_z <- s_update_z[[1]]
+
+      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+      s_y <- s_update_y[[1]]
+
+      if(alpha_split_prior){
+        # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+      }
+    }
+    ##################### Store iteration output ##################################################
+
+
+    # store value at this iteration
+    if(keep_zmat==TRUE){
+      draw$Z.mat[,,iter] = Z.mat
+      draw$Z.mat.test[,,iter] = Z.mat.test
+
+    }
+    # draw$alpha[,iter] = alpha
+    # draw$beta[,iter] = beta
+    draw$mu[,iter] = mu
+    # draw$sigma2.alpha[iter] = sigma2.alpha
+    # draw$sigma2.beta[iter] = sigma2.beta
+
+
+
+
+    # if(is.null(initial.list)){
+    # print("samplestemp$test[,1] = ")
+    # print(samplestemp$test[,1])
+
+    # mupreds <- sampler$predict(df_for_dbart)
+
+    # Xmat.test[,1:num_lags] <-  Zlag.mat.test
+
+
+    temp_test_mat <- matrix(NA, nrow = n.item*n.ranker,ncol = ncol(df_for_dbart_test))
+
+    for(t  in 1:num_lags){
+      if(noise_in_pred ==1){
+        # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+        temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+      }else{
+        # temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+        # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+        temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+
+      }
+
+    }
+
+    # temp_test_mat[, (num_lags+1):ncol(Xmat.test)] <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,
+    #                                                                      (num_lags+1):ncol(Xmat.test)])
+
+    temp_test_mat <- data.frame(x = temp_test_mat)
+    colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+
+    # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+
+    temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+
+    # print("Line 5488")
+
+
+    temp_mu_test <- rep(NA,  nrow(df_for_dbart_test) )
+
+
+    # if(iter < 5){
+    #   print("temp_test_mat = " )
+    #   print(temp_test_mat)
+    # }
+
+    for(t1 in 1:num_test_periods){
+      #produce a prediction
+
+      # must use original column names to prevent an error in the predict function
+      colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+
+      testpredvec <- sampler$predict(temp_test_mat)
+
+      #fill in temp_test_preds with noise
+      if(noise_in_pred ==1){
+        temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+      }else{
+        temp_test_preds[ , t1] <- testpredvec #+ rnorm( n.item*n.ranker )
+      }
+
+
+      #update temp_test_mat
+      #shift z columns to the right and fill in leftmost column
+
+      #need to rewrite this if want to allow for no observed covariates
+
+      # temp_test_mat <-  data.frame( x= cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ) )
+
+      if(t1 != num_test_periods){
+
+
+        if(num_lags ==1){
+          temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] #,
+                                                    # as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),])
+          ))
+
+        }else{
+          temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
+                                                    temp_test_mat[,1:(num_lags-1)] #,
+                                                    # as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),])
+          ))
+
+        }
+      }
+
+      # colnames(temp_test_mat) <- colnames(Xmat.test)
+
+
+      #fill in temp_mu_test without noise
+      temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+
+
+    }
+
+    #also update Zlag.mat.test ?
+    #perhaps this is unnecessary here?
+
+    # print("Line 5545")
+
+
+    Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+    # if(nrow(X.test) >0 ){
+    for(t in 1:num_lags){
+      # if(t==1){
+      #   #repeating the last period values
+      #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+      #
+      #   #other option is to set all unobservable values to zero
+      #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+      #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+      #
+      #
+      # }else{
+
+      if(num_test_periods > t ){
+        #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                               as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+
+
+
+      }else{
+        #nothing to fill in if num_test_periods <= t
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+      }
+
+
+      # }
+    }
+    # }
+
+    # if(nrow(X.test)>0){
+    #
+    #
+    #   for(j in 1:num_lags){
+    #
+    #     #perhaps this should be removed for when Z is updated properly below
+    #     sampler$setTestPredictor(x = Zlag.mat.test[,j], column = j)
+    #
+    #   }
+    #
+    # }
+
+
+    draw$mu_test[,iter] <- temp_mu_test
+    # draw$mu_test[,iter] <- samplestemp$test[,1]
+
+    if(keep_zmat==TRUE){
+      draw$Z.mat.test[,,iter]  <- matrix(data = as.vector(temp_test_preds), nrow = n.item, ncol = n.ranker*num_test_periods)
+    }
+
+
+    if(sparse){
+      draw$alpha_s_y_store[iter] <- alpha_s_y
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter,] <- var_count_y
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter,] <- s_y
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
+
+    # draw$mu_test[,1] <- samplestemp$test[,1]
+
+    # }else{
+    #   draw$mu_test[,1] <- initial.list$mu_test
+    # }
+
+
+
+
+    # if( nrow(X.test) >0 ){
+    #   draw$mu_test[,iter] <- samplestemp$test[,1]
+    # }
+
+
+    # print iteration number
+    if(iter %% print.opt == 0){
+      print(paste("Gibbs Iteration", iter))
+      # print(c(sigma2.alpha, sigma2.beta))
+    }
+
+    iter <- iter+1
+  } # end loop over MCMC iterations
+
+
+  return(draw)
+}
+
+
+
+##///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+##///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+#' Auto-regressive BART model for Bayesian Analysis of Rank-Order data with Covariates
+#'
+#' Implement the Bayesian model for rank-order data with at most 1 lag of the latent variable (and filtering and smoothing) and with covariate information.
+#' @import truncnorm
+#' @import mvtnorm
+#' @import dbarts
+#' @import LinConGauss
+#' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{MT} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers and \eqn{T} time periods, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
+#' @param X.train An \eqn{N} by \eqn{L} training covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
+#' @param X.test An \eqn{N} by \eqn{L} test covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
+#' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param nu.alpha The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param tau2.beta The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param nu.beta The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param n.item Number of entities/items being ranked.
+#' @param n.rankerbytime Number of rankers multiplied by number of time periods
+#' @param n.ranker Number of rankers
+#' @param n.time Number of time periods
+#' @param p.cov Number of covariates.
+#' @param iter.max Number of iterations for Gibbs sampler.
+#' @param para.expan ?unused? Logical variable for whether using parameter expansion in the Gibbs sampler.
+#' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @param initial.list List of initial values for the Gibbs sample. If not null, must contain elements named Z.mat and mu.
+#' @param n.trees (dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.
+#' @param n.chains (dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
+#' @param n.threads  (dbarts option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
+#' @param printEvery (dbarts option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
+#' @param printCutoffs (dbarts option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
+#' @param rngKind (dbarts option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
+#' @param rngNormalKind (dbarts option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
+#' @param rngSeed (dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
+#' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
+#' @param num_lags Number of lags of the latent vairable to use as splitting variables.
+#' @param diff_num_test_rankers Equal to 1 if there is a different number of rankers in the test data than in the training data.
+#' @param keep_zmat Boolean. If equal to TRUE output the draws of Zmat for training data and test data
+#' @param noise_in_pred If equal to 1, keep noise in test prediction calculations
+#' @param seq_z_draws deprecated option for drawing latent variable values within MCMC
+#' @param N_hdr number of draws for Holmes-Diaconis-Ross algorithm applied to linearly constrained Gaussians (Algorithm 1 of Gessner et al.). Used for calculation of integrals within sampling of latent variables in MCMC.
+#' @param rho_hdr Rho parameter for Holmes-Diaconis-Ross algorithm applied to linearly constrained Gaussians (Algorithm 1 of Gessner et al.). Used for calculation of integrals within sampling of latent variables in MCMC.
+#' @param smoothing_method Method for sampling the latent variable from the smoothing distribution within MCMC. If "AR", then Accept-Reject sampling. If "MH", then Metropolis-Hastings sampling.
+#' @param num_horizon Number of time periods into the furture to predict ranks.
+#' @param num_z_iters Number of Gibbs iterations for latent outcome z samples per overall MCMC iteration.
+#' @param itemcovars Set equal to TRUE if covariates vary across items, and FALSE otherwise.
+#' @return A list is returned containing the following elements:
+#' \item{mu}{A matrix of dimension n.item.n.ranker.n.time by iter.max. Columns correspond to MCMC iterations. Each column gives direct predictions given the previous lagged draws of Z (no filtering or smoothing, not in agreement with observed ranks). The rows are ordered with all items for ranker 1 in time period 1, then all items for ranker 2 in time period 1, and so on. }
+#' \item{mu_test}{A matrix of dimension n.item.n.ranker.num_horizon by iter.max. Columns correspond to MCMC iterations. Each column gives direct predictions given the previous lagged draws of Z (no filtering or smoothing, not in agreement with observed ranks). The rows are ordered with all items for ranker 1 in the first horizon, then all items for ranker 2 in the first horizon, and so on. }
+#' \item{Z.mat}{A 3d array of dimenions c(n.item, n.ranker*n.time, iter.max). Each slice corresponds to an MCMC iteration. The first n.ranker columns are for all rankers in the first time period. The second n.ranker columns are for the second time period, and so on.}
+#' \item{Z.mat.test}{A 3d array of dimenions c(n.item, n.ranker*num_horizon, iter.max). Each slice corresponds to an MCMC iteration. The first n.ranker columns are for all rankers in the first time horizon. The second n.ranker columns are for the second time horizon, and so on.}
+#' @useDynLib ROBART2, .registration = TRUE
+#' @export
+ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
+                                        X.train = matrix(NA, nrow =dim(pair.comp.ten)[1], ncol = 0),
+                                        X.test = matrix(NA, nrow =0, ncol = 0),
+                                        # tau2.alpha = 5^2,
+                                        # nu.alpha = 3,
+                                        # tau2.beta = 5^2,
+                                        # nu.beta = 3,
+                                        n.item = dim(pair.comp.ten)[1],
+                                        n.rankerbytime = dim(pair.comp.ten)[3],
+                                        n.ranker,
+                                        n.time,
+                                        p.cov = ncol(X.train),
+                                        iter.max = 5000,
+                                        para.expan = TRUE,
+                                        print.opt = 100,
+                                        initial.list = NULL,
+                                        n.trees = 50L,
+                                        n.burn = 0L,
+                                        n.samples = 1L,
+                                        n.thin = 1L,
+                                        n.chains = 1,
+                                        n.threads = 1L,#guessNumCores(),
+                                        printEvery = 100L,
+                                        printCutoffs = 0L,
+                                        rngKind = "default",
+                                        rngNormalKind = "default",
+                                        rngSeed = NA_integer_,
+                                        updateState = FALSE,
+                                        num_lags = 1,
+                                        diff_num_test_rankers = 0,
+                                        keep_zmat = FALSE,
+                                        noise_in_pred = 0,
+                                        seq_z_draws = 1,
+                                        N_hdr = 100,
+                                        rho_hdr = 0.5,
+                                        smoothing_method = "AR",
+                                        num_horizon = 1,
+                                        num_z_iters = 10,
+                                        itemcovars = FALSE,
+                                        tree_power = 2,
+                                        tree_base = 0.95,
+                                        n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                        sparse = TRUE,
+                                        alpha_a_y = 0.5,
+                                        alpha_b_y = 1,
+                                        alpha_split_prior = TRUE){
+
+
+  Num_lin_ess_samples <- 100
+  num_test_periods <- num_horizon
+
+  if(num_horizon < 1){
+    stop("num_horizon must be >=1")
+  }
+
+  if(num_lags>1){
+    stop("Code only written for num_lags == 1")
+  }
+
+
+  if(smoothing_method != "AR"){
+    if(smoothing_method != "MH"){
+
+      stop("smoothing_method must equal AR (Accept-Reject) or MH (Metropolis-Hastings)")
+
+    }
+  }
+
+
+  # print("begin function")
+
+  if(!is.integer(num_lags)){
+    stop("num_lags must be an integer.")
+  }
+  if(num_lags <1){
+    stop("num_lags must be an integer greater than or equal to 1.")
+  }
+
+  if(n.rankerbytime!=n.ranker*n.time ){
+    stop("n.rankerbytime != n.ranker*n.time")
+  }
+
+
+  # length_mu <- 1
+  length_mu <- n.item*n.rankerbytime
+
+
+  if(nrow(X.train)==n.item){
+    stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+
+    length_mu <- n.item
+  }else{
+    if(nrow(X.train)==n.item*n.rankerbytime){
+      length_mu <- n.item*n.rankerbytime
+    }else{
+      stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+    }
+
+  }
+
+
+  length_mu_test <- 1
+
+
+  if(nrow(X.test) >0 ){
+
+
+    if(diff_num_test_rankers==1){
+      stop("Code not yet written for test data with different rankers to training data.")
+    }else{
+
+      if(nrow(X.test) != n.item*n.ranker*num_test_periods ){
+        stop("nrow(X.test) != n.item*n.ranker*num_test_periods")
+
+      }else{
+        length_mu_test <- nrow(X.test)
+
+      }
+
+
+    }
+
+
+
+    #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+
+
+
+    # if(diff_num_test_rankers==1){
+    #   length_mu_test <- nrow(X.test)
+    # }else{
+    #   if(nrow(X.train)==n.item){
+    #     length_mu_test <- n.item*n.ranker
+    #
+    #   }else{
+    #     length_mu_test <- nrow(X.test)
+    #
+    #   }
+    # }
+  }
+
+
+
+  draw = list(
+    # Z.mat = array(NA, dim = c(n.item, n.ranker*n.time, iter.max)),
+    #alpha = array(NA, dim = c(n.item, iter.max)),
+    #beta = array(NA, dim = c(p.cov, iter.max)),
+    #if the x values do not vary over rankers, then there will only be n.item unique x values
+    mu = array(NA, dim = c(length_mu, iter.max)),#,
+    mu_test = array(NA, dim = c(n.item*n.ranker*num_horizon, iter.max))
+    #
+    #
+    #can have mu of dimension n.item*n.ranker to operationalize rnanker-specific mu values, then need to edit gibbs update of Z
+    #mu = array(NA, dim = c(n.item*n.ranker, iter.max))#,
+    # sigma2.alpha = rep(NA, iter.max),
+    # sigma2.beta = rep(NA, iter.max)
+  )
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat = array(NA, dim = c(n.item, n.ranker*n.time, iter.max))
+    draw$Z.mat.test = array(NA, dim = c(n.item, n.ranker*num_horizon, iter.max))
+  }
+
+  # if(nrow(X.test) >0 ){
+  #   draw$mu_test <- array(NA, dim = c(length_mu_test, iter.max))
+  #
+  #   if(keep_zmat==TRUE){
+  #     draw$Z.mat.test <- array(NA, dim = c(n.item, n.ranker*num_test_periods, iter.max))
+  #   }
+  # }
+
+
+
+  # create observed ranks for constraints
+  # OR EDIT CODE SO THAT INPUT IS RANKS?
+  # can then apply function FullRankToPairComp to create pair.comp.ten
+
+
+  # ranks matrix
+  # number of columns is n.ranker*n.time
+  # number or rows is n.item
+
+  # first M columns are for all rankers in the first time period
+  # next M columns are for all rankers in the second time period
+  # and so on
+
+
+  # ranks_mat <- matrix(NA,
+  #                     ncol = n.ranker*n.time,
+  #                     nrow = n.item )
+  #
+  #
+  # #n.item by n.item
+  #
+  # for(t in 1:n.time){
+  #
+  #   for(indiv in 1:n.ranker){
+  #     pair.comp <- pair.comp.ten[, , (t-1)*n.ranker + indiv]
+  #
+  #     # 1 corresponding to "highest rank" . i.e. highest utility ite,
+  #     # up.order = rowSums( pair.comp, na.rm = TRUE ) + 1
+  #
+  #     # 1 corresponding to "lowest rank". i.e. lowest utility item
+  #
+  #     up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
+  #
+  #
+  #     ranks_mat[, (t-1)*n.ranker + indiv] <- up.order
+  #
+  #   }
+  # }
+  #
+  #
+  # # it might be more efficient to create and save all rank constraint matrices at this stage
+  #
+  #
+  # rank_cons_arr <- array(data = NA,dim = c(n.item - 1, n.item,n.ranker ,  n.time))
+  #
+  # for(indiv in 1:n.ranker){
+  #
+  #   for(t in 1:n.time){
+  #
+  #     rankvec_t <- ranks_mat[,  (t-1)*n.ranker + indiv]
+  #
+  #
+  #     rankconstraint_t <- matrix(0,
+  #                                nrow = n.item - 1,
+  #                                ncol = n.item)
+  #
+  #     # note: ordering of rows is unimportant
+  #     # as long as ordering agrees with the ordering of the mean vector
+  #
+  #     # so can begin by filling in first row
+  #
+  #     #MUST BE EDITED IF ALLOW FOR TIES
+  #     for(rankind in 1:(length(rankvec_t)-1)){
+  #
+  #       rankconstraint_t[rankind, which(rankvec_t == rankind)] <- -1
+  #       rankconstraint_t[rankind, which(rankvec_t == rankind+1)] <- 1
+  #
+  #       # rankconstraint_t[rankind, rankvec_t[rankind]] <- -1
+  #       # rankconstraint_t[rankind, rankvec_t[rankind+1]] <- 1
+  #
+  #     }
+  #
+  #     rank_cons_arr[, , indiv, t] <- rankconstraint_t
+  #
+  #   }
+  # }
+  # # create array of rank constraint matrices
+
+
+  # arbitrarily set zprior_vec
+  zprior_vec <- rep(0, n.item)
+
+
+  boundconstraints <- matrix(NA,
+                             nrow = 2*n.item,
+                             ncol = n.item)
+
+  # use kroenecker product
+  # there is probably a more efficient way of doing this
+
+  boundconstraints <- diag(1,n.item, n.item) %x% c(1,-1)
+
+
+  # print("Line 670.")
+
+  if(is.null(initial.list)){
+    ## initial values for Z
+    Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker*n.time)
+    for(j in 1:(n.ranker*n.time)){
+
+      pair.comp <- pair.comp.ten[,,j]
+
+      # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+      # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+
+      # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+      # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+
+      # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
+      # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+
+
+      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+      # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
+      # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
+
+    }
+
+
+    Z.mat.test = matrix(NA, nrow = n.item, ncol = n.ranker*num_horizon)
+
+    ## initial values
+    # alpha = rep(0, n.item)
+    # beta = rep(0, p.cov)
+
+    # print("create data matrices for dbarts")
+
+    #create time period 1 initial values for all items and all rankers
+    #[actually these vlaues are not updated at al]
+    #one possibility is all zeros, although then all T1 observations fall in one branc if split on Z
+    # init_Z_t0 <- rep(0, n.item*n.ranker)
+    #another possibility is normally distributed initial values
+    # init_Z_t0 <- rnorm(n.item*n.ranker)
+
+    # with initial value create vector of Z lags
+    # Zlag.1.mat <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-1)*n.item*n.ranker)])
+
+    #must do something similar if extend to two period lags, three period lags etc.
+
+    Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+    for(t in 1:num_lags){
+      init_Z_t0 <- rep(0, t*n.item*n.ranker)
+      # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+      Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+    }
+
+    #it is also necessary to create initial values for the test data
+
+    Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+    # if(nrow(X.test) >0 ){
+    for(t in 1:num_lags){
+      # if(t==1){
+      #   #repeating the last period values
+      #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+      #
+      #   #other option is to set all unobservable values to zero
+      #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+      #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+      #
+      #
+      # }else{
+
+      if(num_test_periods > t ){
+        #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                               rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                                   (num_test_periods-t) )  )
+
+        # #other option is to set all unobservable values to zero
+        # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+        #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+
+      }else{
+        #nothing to fill in if num_test_periods <= t
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+      }
+
+
+      # }
+    }
+    # }
+
+
+    # #must repeat x matrix if only n.item by the number of covaraites
+    # #otherwise, the matrix has ranking specific covariates
+    # if(nrow(X.train)==n.item){
+    #
+    #   stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+    #   #this part of the code needs to be rewritten if code
+    #   #edited to allow for nrow(X.train)==n.item
+    #   #currently the dimensions of the traiinng and test matrices defined below do not agree with this option
+    #
+    #   Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #                                                                               ncol =  ncol(X.train) + num_lags ,
+    #                                                                               byrow = TRUE ))
+    #   )
+    #
+    #
+    #   #colnames(Xmat.train) <- c("y", "x","z","w")
+    #
+    #   if(nrow(X.test) >0 ){
+    #     # print("nrow(X.test) = ")
+    #     # print(nrow(X.test))
+    #
+    #     #Note: Zlag.mat.test already contains vecotrs. Each lag is correctly a separate vector
+    #     #so as.vector is NOT applied here to Zlag.mat.test.
+    #
+    #     Xmat.test <- data.frame(x = cbind(Zlag.mat.test, matrix( rep( t( X.test ) , n.ranker ) ,
+    #                                                              ncol =  ncol(X.test) , byrow = TRUE ) )
+    #     )
+    #     #colnames(Xmat.test) <- c("x","z","w")
+    #
+    #     #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+    #   }
+    #
+    # }else{
+    #   if(nrow(X.train)==n.item*n.ranker*n.time){
+    #     Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat, X.train) )
+    #
+    #     # print(colnames(Xmat.train))
+    #
+    #     if(nrow(X.test)>0 ){
+    #       Xmat.test  <- data.frame(x = cbind( Zlag.mat.test, X.test ) )
+    #
+    #       #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+    #
+    #     }
+    #   }else{
+    #     stop("nrow(X.train) not equal to n.item or n.item*n.ranker")
+    #   }
+    #
+    # }
+
+
+
+    print("Line 799.")
+
+    # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
+
+
+    #must repeat x matrix if only n.item by the number of covaraites
+    #otherwise, the matrix has ranking specific covariates
+    if(nrow(X.train)==n.item){
+
+      stop("nrow(X.train) not equal to n.item*n.rankerbytime")
+      #this part of the code needs to be rewritten if code
+      #edited to allow for nrow(X.train)==n.item
+      #currently the dimensions of the traiinng and test matrices defined below do not agree with this option
+
+      Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+                                                                                  ncol =  ncol(X.train) + num_lags ,
+                                                                                  byrow = TRUE ))
+      )
+
+
+      #colnames(Xmat.train) <- c("y", "x","z","w")
+
+      if(nrow(X.test) >0 ){
+        # print("nrow(X.test) = ")
+        # print(nrow(X.test))
+
+        #Note: Zlag.mat.test already contains vecotrs. Each lag is correctly a separate vector
+        #so as.vector is NOT applied here to Zlag.mat.test.
+
+        Xmat.test <- data.frame(x = cbind(Zlag.mat.test, matrix( rep( t( X.test ) , n.ranker ) ,
+                                                                 ncol =  ncol(X.test) , byrow = TRUE ) )
+        )
+        #colnames(Xmat.test) <- c("x","z","w")
+
+
+
+
+
+        #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+
+
+      }
+    }else{
+      if(nrow(X.train)==n.item*n.ranker*n.time){
+        Xmat.train <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat, X.train) )
+
+        # print(colnames(Xmat.train))
+
+        if(nrow(X.test)>0 ){
+          Xmat.test  <- data.frame(x = cbind( Zlag.mat.test, X.test ) )
+
+          #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
+
+        }
+      }else{
+        stop("nrow(X.train) not equal to n.item or n.item*n.ranker")
+      }
+
+    }
+
+
+    p_y <- ncol(Xmat.train) - 1 # subtracting 1. Outcome is a column of Xmat.train
+
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- rep(NA, iter.max)
+      draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+      draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
+    }
+
+    control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                             keepTrees = TRUE,
+                             n.trees = n.trees,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
+
+
+    # print(colnames(Xmat.train))
+    # print(colnames(Xmat.test))
+
+    # print("begin dbarts")
+
+
+    if(nrow(X.test )==0){
+      sampler <- dbarts(y ~ .,
+                        data = Xmat.train,
+                        #test = Xmat.test,
+                        control = control,
+                        resid.prior = fixed(1),
+                        tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
+                        sigma=1 #check if this is the correct approach for setting the variance to 1
+      )
+
+    }else{
+      sampler <- dbarts(y ~ .,
+                        data = Xmat.train,
+                        test = Xmat.test,
+                        control = control,
+                        resid.prior = fixed(1), #this was suggested by the dbarts package author. I assume this is sufficient
+                        tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
+                        sigma=1 #
+      )
+
+    }
+
+
+    # print("error after dbarts")
+
+    #set the response.
+    #Check that 0 is a reasonable initial value
+    #perhaps makes more sense to use initial values of Z
+    sampler$setResponse(y = as.vector(Z.mat))
+    # sampler$setSigma(sigma = 1)
+
+    min_resp <- min(as.vector(Z.mat))
+    max_resp <- max(as.vector(Z.mat))
+
+    #sampler$setPredictor(x= Xmat.train$x, column = 1, forceUpdate = TRUE)
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+    #mu = as.vector( alpha + X.mat %*% beta )
+    sampler$sampleTreesFromPrior()
+    samplestemp <- sampler$run()
+
+    mutemp <- samplestemp$train[,1]
+    #suppose there are a number of samples
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+    # print("sigma = ")
+    # print(samplestemp$sigma)
+
+    # mupreds <- sampler$predict(Xmat.train)
+
+    # mu <- mutemp
+
+    if(nrow(X.train)==n.item){
+      #each n.ranker values of u should be equal,
+      #so just take one mu value from each of these
+      #this keeps the dimension of mu equal to n.item
+      #so a new Gibbs sampler update does not have to be written for Z
+      stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+
+      # if(mutemp[1]!= mutemp[n.item+1]){
+      if(mutemp[n.item+1]!= mutemp[n.item+n.item+1]){
+        print("initiating mu")
+        print("Xmat.train = ")
+        print(Xmat.train)
+        print("Z.mat = ")
+        print(Z.mat)
+
+        print("samplestemp$sigma = ")
+        print(samplestemp$sigma)
+        print("samplestemp$varcount = ")
+        print(samplestemp$varcount)
+
+        print("samplestemp$train[,1] = ")
+        print(samplestemp$train[,1])
+
+        print("n.item = ")
+        print(n.item)
+        print("mutemp = ")
+        print(mutemp)
+
+        # print("mupreds= ")
+        # print(mupreds)
+
+        stop("mutemp[1]!= mutemp[n.item+1]")
+      }
+
+      #mu = mutemp[(1:n.item)]
+      mu = mutemp[n.item+(1:n.item)]
+
+      #mu = mutemp[(1:n.item)*n.ranker]
+
+    }else{
+      if(nrow(X.train)==n.item*n.ranker*n.time){
+        mu <- mutemp
+      }else{
+        stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+      }
+
+    }
+
+
+    ## initial values for sigma2.alpha and sigma2.beta
+    # sigma2.alpha = tau2.alpha
+    # sigma2.beta = tau2.beta
+
+  }else{
+    Z.mat <- initial.list$Z.mat
+    Z.mat.test <- initial.list$Z.mat.test
+
+    # alpha = initial.list$alpha
+    # beta = initial.list$beta
+    mu <- initial.list$mu #as.vector( alpha + X.mat %*% beta )
+    # sigma2.alpha = initial.list$sigma2.alpha
+    # sigma2.beta = initial.list$sigma2.beta
+  }
+
+
+
+  ## store initial value
+  #
+  #   print("Z.mat = ")
+  #   print(Z.mat)
+  #
+  #
+  #   print("dim(draw$Z.mat) = ")
+  #
+  #   print(dim(draw$Z.mat))
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat[,,1] <- Z.mat
+    draw$Z.mat.test[,,1] <- Z.mat.test
+  }
+  # draw$alpha[,1] = alpha
+  # draw$beta[,1] = beta
+  draw$mu[,1] <- mu
+  # draw$sigma2.alpha[1] = sigma2.alpha
+  # draw$sigma2.beta[1] = sigma2.beta
+
+
+  print("Line 954")
+
+
+  # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
+
+
+  if(is.null(initial.list)){
+    # print("samplestemp$test[,1] = ")
+    # print(samplestemp$test[,1])
+
+    # mupreds <- sampler$predict(Xmat.train)
+
+    # temp_test_mat <- as.matrix(df_for_dbart_test[1:(n.item*n.ranker) ,])  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+
+    temp_test_mat <- data.frame( x = as.matrix(Xmat.test[1:(n.item*n.ranker) ,]) ) #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    colnames(temp_test_mat) <- colnames(Xmat.test)
+
+
+
+    temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+
+    # temp_mu_test <- rep(NA,  nrow(df_for_dbart_test) )
+    temp_mu_test <- rep(NA,  nrow(Xmat.test) )
+
+    # print("colnames(temp_test_mat) = ")
+
+    # print(colnames(temp_test_mat))
+
+    for(t1 in 1:num_test_periods){
+      #produce a prediction
+
+      # print("t1 = ")
+      # print(t1)
+      #
+      #
+      # print("colnames(temp_test_mat) = ")
+      # print(colnames(temp_test_mat))
+
+      testpredvec <- sampler$predict(temp_test_mat)
+
+      #fill in temp_test_preds with noise
+
+      if(noise_in_pred==1){
+        temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+      }else{
+        temp_test_preds[ , t1] <- testpredvec
+      }
+
+
+
+      #update temp_test_mat
+      #shift z columns to the right and fill in leftmost column
+
+      #need to rewrite this if want to allow for no observed covariates
+
+      if(num_lags ==1){
+        temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
+                                                  as.matrix(Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] )))
+
+      }else{
+        temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
+                                                  as.matrix(Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] )))
+
+      }
+
+      colnames(temp_test_mat) <- colnames(Xmat.test)
+
+      #fill in temp_mu_test without noise
+      temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+
+
+    }
+
+    #also update Zlag.mat.test ?
+    #perhaps this is unnecessary here?
+
+
+    Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+    # if(nrow(X.test) >0 ){
+    for(t in 1:num_lags){
+      # if(t==1){
+      #   #repeating the last period values
+      #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+      #
+      #   #other option is to set all unobservable values to zero
+      #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+      #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+      #
+      #
+      # }else{
+
+      if(num_test_periods > t ){
+        #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+        # print("as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)]")
+        # print(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)])
+        #
+        # print("as.vector(temp_test_mat)")
+        # print(as.vector(as.matrix(temp_test_mat)))
+        #
+        # print("as.vector(temp_test_mat)[1:((num_test_periods - t)*(n.item*n.ranker))  ]")
+        # print(as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ])
+
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                               as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+
+
+
+      }else{
+        #nothing to fill in if num_test_periods <= t
+        Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+      }
+
+
+      # }
+    }
+    # }
+
+
+
+
+    draw$mu_test[,1] <- temp_mu_test
+
+    # draw$mu_test[,1] <- samplestemp$test[,1]
+    if(keep_zmat==TRUE){
+      draw$Z.mat.test[,,1]  <- matrix(data = as.vector(temp_test_preds), nrow = n.item, ncol = n.ranker*num_test_periods)
+    }
+
+  }else{
+    draw$mu_test[,1] <- initial.list$mu_test
+  }
+
+
+
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+  #//////////////////////////////////////////////////////////////////////////
+
+  ##################### Begin Gibbs sampler ##################################################
+  #//////////////////////////////////////////////////////////////////////////
+  ## Gibbs iteration
+  iter <- 2
+  breakcount <- 0
+
+  while(iter <= iter.max){
+    # for(iter in 2:iter.max){
+
+    Z.matold <- Z.mat
+
+    print("iter = ")
+    print(iter)
+
+    ##################### Sample from the Smoothing Distribution #################################################################
+
+    # Sample from the smoothing distribution at each time period beginning at T
+
+    # loop over individuals/rankers (if there is more than one individual/ranker)
+
+
+    #################### calculate intersection matrices ########################################
+
+    # since there are no covariates, the intersection matrices do not vary across time or individuals
+
+    #### obtain intersection matrices for time period t = 1 ###############
+
+
+
+    # create intersection matrices
+
+
+    intersectmat_tmin1 <- NA
+    list_item_intersectmats_tmin1 <- NA
+
+
+
+    # num_regions <- nrow(intersectmat)
+
+    # print("Line 1169")
+
+
+    for(z_iter_ind in 1:num_z_iters){
+
+      # print("z_iter_ind = ")
+      # print(z_iter_ind)
+
+      for(indiv in 1:n.ranker){
+
+        # print("indiv = ")
+        # print(indiv)
+
+        ########### calculate qkt   for t = 1 ########################################
+
+        Biglist_list_item_intersectmats <- list()
+        Biglist_intersectmats <- list()
+
+
+        ######## Period 1 Intersection Matrix #########################
+
+        # create vector of indices for ranker indiv in time period 1
+        ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+        ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+        obs_indices <- ind_start:ind_end
+
+        # print("Begin Period 1 intersection matrices = ")
+        # print(indiv)
+
+        if(itemcovars == FALSE){
+
+
+          list_inter_mats <- list()
+
+          for(i in 1:n.trees){
+
+            treeexample1 <- sampler$getTrees(treeNums = i,
+                                             chainNums = 1,
+                                             sampleNums = 1)
+
+            # rebuilt_tree <- rebuildTree2(treeexample1)
+
+            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+
+            # print("rebuilt_tree = ")
+            # print(rebuilt_tree)
+
+            #must use covariates for individual indiv at time period t
+
+            # print("Xmat.train$x[obs_indices[1],, drop = FALSE] = ")
+            # print(Xmat.train$x[obs_indices[1],, drop = FALSE])
+            #
+            #
+            # print("Xmat.train$x[obs_indices[1],] = ")
+            # print(Xmat.train$x[obs_indices[1],])
+            #
+            #
+            # print("obs_indices[1] = ")
+            # print(obs_indices[1])
+            #
+            #
+            # print("Xmat.train = ")
+            # print(Xmat.train)
+
+
+
+            # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+
+
+          }
+
+          intersectmat_tmin1 <- interNtreesB(list_inter_mats)
+
+
+          intersectmat_tmin1 <- cbind(intersectmat_tmin1, rep(NA, nrow(intersectmat_tmin1)))
+
+          # calculate one dimensional integrals
+          for(rowind in 1:nrow(intersectmat_tmin1)){
+            # ktemp <- nkt_mat[rowind,k_index]
+            # tempmean <- intersectmat_tmin1[ktemp,1]
+            templower <- intersectmat_tmin1[rowind,2]
+            tempupper <- intersectmat_tmin1[rowind,3]
+
+            # ASSUMING PRIOR MEAN ALL ZEROS
+            intersectmat_tmin1[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+            # tempintegralval <- tempintegralval*onedim_int
+          }
+
+
+          Biglist_intersectmats[[1]] <- intersectmat_tmin1
+
+
+        }else{ # itemcovars == TRUE
+
+
+          list_item_intersectmats_tmin1 <- list()
+
+          for(index_item in 1:n.item){
+
+            obs_one_ind <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + index_item
+
+            list_inter_mats <- list()
+
+            for(i in 1:n.trees){
+
+              treeexample1 <- sampler$getTrees(treeNums = i,
+                                               chainNums = 1,
+                                               sampleNums = 1)
+
+              # rebuilt_tree <- rebuildTree2(treeexample1)
+
+              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+              #must use covariates for individual indiv at time period t
+
+              # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
+
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+
+
+            } #end loop over trees
+
+            intersectmat_tmin1 <- interNtreesB(list_inter_mats)
+
+            intersectmat_tmin1 <- cbind(intersectmat_tmin1, rep(NA, nrow(intersectmat_tmin1)))
+
+            # calculate one dimensional integrals
+            for(rowind in 1:nrow(intersectmat_tmin1)){
+              # ktemp <- nkt_mat[rowind,k_index]
+              # tempmean <- intersectmat_tmin1[ktemp,1]
+              templower <- intersectmat_tmin1[rowind,2]
+              tempupper <- intersectmat_tmin1[rowind,3]
+
+              # ASSUMING PRIOR MEAN ALL ZEROS
+              intersectmat_tmin1[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+              # tempintegralval <- tempintegralval*onedim_int
+            }
+
+
+            list_item_intersectmats_tmin1[[index_item]] <- intersectmat_tmin1
+
+
+          } #end loop over items
+
+          Biglist_list_item_intersectmats[[1]] <- list_item_intersectmats_tmin1
+
+        } # end else itemcovars == TRUE
+
+
+        ################ period 2 intersection matrix #################################################
+
+        # create vector of indices for ranker indiv in time period 2
+        ind_start <- (2 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+        ind_end <- (2 - 1)*n.ranker*n.item+n.item*indiv
+        obs_indices <- ind_start:ind_end
+
+        if(itemcovars == FALSE){
+
+
+          list_inter_mats <- list()
+
+          for(i in 1:n.trees){
+
+            treeexample1 <- sampler$getTrees(treeNums = i,
+                                             chainNums = 1,
+                                             sampleNums = 1)
+
+            # rebuilt_tree <- rebuildTree2(treeexample1)
+
+            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+            #must use covariates for individual indiv at time period t
+
+            # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
+
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+
+          }
+
+          intersectmat <- interNtreesB(list_inter_mats)
+
+
+          intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
+
+          # calculate one dimensional integrals
+          for(rowind in 1:nrow(intersectmat)){
+            # ktemp <- nkt_mat[rowind,k_index]
+            # tempmean <- intersectmat[ktemp,1]
+            templower <- intersectmat[rowind,2]
+            tempupper <- intersectmat[rowind,3]
+
+            # ASSUMING PRIOR MEAN ALL ZEROS
+            intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+            # tempintegralval <- tempintegralval*onedim_int
+          }
+
+
+          Biglist_intersectmats[[2]] <- intersectmat
+
+
+        }else{ # itemcovars == TRUE
+
+
+          list_item_intersectmats <- list()
+
+          for(index_item in 1:n.item){
+
+            obs_one_ind <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + index_item
+
+            list_inter_mats <- list()
+
+            for(i in 1:n.trees){
+
+              treeexample1 <- sampler$getTrees(treeNums = i,
+                                               chainNums = 1,
+                                               sampleNums = 1)
+
+              # rebuilt_tree <- rebuildTree2(treeexample1)
+
+              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+              #must use covariates for individual indiv at time period t
+
+              # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
+
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+
+            } #end loop over trees
+
+            intersectmat <- interNtreesB(list_inter_mats)
+
+            intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
+
+            # calculate one dimensional integrals
+            for(rowind in 1:nrow(intersectmat)){
+              # ktemp <- nkt_mat[rowind,k_index]
+              # tempmean <- intersectmat[ktemp,1]
+              templower <- intersectmat[rowind,2]
+              tempupper <- intersectmat[rowind,3]
+
+              # ASSUMING PRIOR MEAN ALL ZEROS
+              intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+              # tempintegralval <- tempintegralval*onedim_int
+            }
+
+
+            list_item_intersectmats[[index_item]] <- intersectmat
+
+
+          } #end loop over items
+
+          Biglist_list_item_intersectmats[[2]] <- list_item_intersectmats
+
+        } # end else itemcovars == TRUE
+
+
+        # print("End Period 1 intersection matrices = ")
+
+
+        ##### t = 3 to T intersect matrices ######################
+
+        # print("Begin loop for intersection matrices = ")
+
+        for(t in 3:n.time){
+
+          #### obtain intersection matrices for time period t ###############
+          # print("t = ")
+          # print(t)
+
+          # create vector of indices for ranker indiv in time period 1
+          ind_start <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+          ind_end <- (t - 1)*n.ranker*n.item+n.item*indiv
+          obs_indices <- ind_start:ind_end
+
+          if(itemcovars == FALSE){
+
+
+            list_inter_mats <- list()
+
+            for(i in 1:n.trees){
+
+              treeexample1 <- sampler$getTrees(treeNums = i,
+                                               chainNums = 1,
+                                               sampleNums = 1)
+
+              # rebuilt_tree <- rebuildTree2(treeexample1)
+
+              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+              #must use covariates for individual indiv at time period t
+
+              # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
+
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                       as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+
+            }
+
+            intersectmat <- interNtreesB(list_inter_mats)
+
+            Biglist_intersectmats[[t]] <- intersectmat
+
+
+          }else{ # itemcovars == TRUE
+
+
+            list_item_intersectmats <- list()
+
+            for(index_item in 1:n.item){
+
+              obs_one_ind <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + index_item
+
+              list_inter_mats <- list()
+
+              for(i in 1:n.trees){
+
+                treeexample1 <- sampler$getTrees(treeNums = i,
+                                                 chainNums = 1,
+                                                 sampleNums = 1)
+
+                # rebuilt_tree <- rebuildTree2(treeexample1)
+
+                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+                #must use covariates for individual indiv at time period t
+
+                # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
+
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+                                                                         as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+
+
+              } #end loop over trees
+
+              intersectmat <- interNtreesB(list_inter_mats)
+
+              list_item_intersectmats[[index_item]] <- intersectmat
+
+
+            } #end loop over items
+
+
+            Biglist_list_item_intersectmats[[t]] <- list_item_intersectmats
+
+
+          } # end else itemcovars == TRUE
+
+        }
+
+
+        # print("End loop for intersection matrices = ")
+
+
+        ######## Begin loop over items ################################
+
+        # print("Begin loop for over items = ")
+
+        for(item_ind in 1:n.item){
+
+          # print("item_ind = ")
+          # print(item_ind)
+
+          if(itemcovars == TRUE){
+            list_item_intersectmats <- Biglist_list_item_intersectmats[[2]]
+            list_item_intersectmats_tmin1 <- Biglist_list_item_intersectmats[[1]]
+
+
+            intersectmat <- list_item_intersectmats[[index_item]]
+            intersectmat_tmin1 <- list_item_intersectmats_tmin1[[index_item]]
+          }else{
+            intersectmat <- Biglist_intersectmats[[2]]
+            intersectmat_tmin1 <- Biglist_intersectmats[[1]]
+          }
+
+          num_regions <- nrow(intersectmat)
+          num_regions_tmin1 <- nrow(intersectmat_tmin1)
+
+          # ########### begin create intersectmat t = 1 ############
+          #
+          # # define intersections inside item loop
+          # # to allow covariates can be item specific
+          #
+          # # create vector of indices for ranker indiv in time period 1
+          #
+          # # this part is not really necessary
+          # ind_start <- (1 - 1)*n.ranker*n.item+n.item*(indiv-1) + 1
+          # ind_end <- (1 - 1)*n.ranker*n.item+n.item*indiv
+          # obs_indices <- ind_start:ind_end
+          #
+          # # obs_indices[1] could jsut be replaced by [1] below\
+          # # because the only variable is zlag, so the other covariates are not used
+          #
+          #
+          # list_inter_mats <- list()
+          #
+          # for(i in 1:n.trees){
+          #
+          #   treeexample1 <- sampler$getTrees(treeNums = i,
+          #                                    chainNums = 1,
+          #                                    sampleNums = 1)
+          #
+          #   rebuilt_tree <- rebuildTree2(treeexample1, sampler)
+          #
+          #
+          #   #must use covariates for individual indiv at time period t
+          #
+          #   list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, as.matrix(df_for_dbart$x[obs_indices[1]]) )
+          #   # list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree$var == -1 , 5:7]
+          #
+          #
+          # }
+          #
+          # intersectmat <- interNtreesB(list_inter_mats)
+          #
+          # # print("Line 1146")
+          #
+          # intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
+          #
+          # # print("Line 1150")
+          #
+          #
+          # # calculate one dimensional integrals
+          # for(rowind in 1:nrow(intersectmat)){
+          #   # ktemp <- nkt_mat[rowind,k_index]
+          #   # tempmean <- intersectmat[ktemp,1]
+          #   templower <- intersectmat[rowind,2]
+          #   tempupper <- intersectmat[rowind,3]
+          #
+          #   # ASSUMING PRIOR MEAN ALL ZEROS
+          #
+          #   # These are the q0 integrals
+          #   intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+          #   # tempintegralval <- tempintegralval*onedim_int
+          # }
+          #
+          # # intersectmat_tmin1 <- intersectmat
+          #
+          #
+          #
+          # ########### end create intersectmat t = 1 ############
+          #
+
+
+
+
+
+          #QUESTION: LOOP OVER ITEMS THEN TIME OT TIME THEN ITEMS?
+
+          # loop over items
+
+          # Now loop over time periods
+
+          # special case for t=1
+
+          # probability matrix for sampling elements
+
+          # let rows be period zero, and columns be period 1 (2?)
+
+          probmattemp <- matrix(0,
+                                nrow = num_regions_tmin1,
+                                ncol = num_regions)
+
+          # loop over period 2 regions into which z_1 can fall
+
+
+          tempbounds <- matrix(NA,
+                               nrow = num_regions,
+                               ncol = 2)
+
+          # Trunc norm prob of next periods latent value conditional on region
+
+          # Create intervals from interval t+1 latent values
+
+          # rankvec_tp1 <- ranks_mat[,  1*n.ranker + indiv]
+          #
+          # # inds for j ranked below i in t+1
+          #
+          #
+          #
+          # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in t+1
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower <- -Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #   temp_lower <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in t+1
+          #
+          # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period t+1
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper <- Inf
+          # }else{
+          #   # Check that this is the period t+1 latent variable value, not period t
+          #
+          #   temp_upper <- as.vector(Z.mat)[1*n.item*n.ranker+
+          #                                    n.item*(indiv - 1) +
+          #                                    aboverank_ind]
+          # }
+
+
+          temp_ztp1 <- as.vector(Z.mat)[1*n.item*n.ranker+
+                                          n.item*(indiv - 1) +
+                                          item_ind]
+
+          temppaircomps <- pair.comp.ten[, , (1-1)*n.ranker + indiv]
+
+          tempz <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                      n.item*(indiv - 1) +
+                                      1:n.item]
+
+          set1 = which( temppaircomps[item_ind, ] == 1)
+          set0 = which( temppaircomps[item_ind, ] == 0)
+
+          if(length(set1) > 0){
+            temp_upper3 = min(tempz[set1])
+          }else{
+            temp_upper3 = Inf
+          }
+
+          if(length(set0) > 0){
+            temp_lower3 = max(tempz[set0])
+          }else{
+            temp_lower3 = -Inf
+          }
+
+          # rankvec_t <- ranks_mat[,  (1-1)*n.ranker + indiv]
+          #
+          # # if(any(order(rankvec_t) !=
+          # #    order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                           n.item*(indiv-1) +
+          # #                           1:n.item])) ){
+          # #
+          # #   # print("order(rankvec_t) = ")
+          # #   # print(order(rankvec_t))
+          # #   #
+          # #   # print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #   #                         n.item*(indiv - 1) +
+          # #   #                         1:n.item])  = ")
+          # #
+          # #   print(order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                                  n.item*(indiv - 1) +
+          # #                                  1:n.item]) )
+          # #
+          # #   # print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #   #                                n.item*(indiv - 1) +
+          # #   #                                1:n.item] = ")
+          # #
+          # #   print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          # #                            n.item*(indiv - 1) +
+          # #                            1:n.item])
+          # #
+          # # }
+          #
+          # # inds for j ranked below i in t
+          #
+          # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in t
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower3 <- -Inf
+          # }else{
+          #   temp_lower3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in t
+          #
+          # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period t
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper3 <- Inf
+          # }else{
+          #   temp_upper3 <- as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     aboverank_ind]
+          # }
+
+
+          for(k_ind in 1:num_regions){
+
+
+
+
+            # obtain mean for truncated normal distribution
+            temp_mean <- intersectmat[k_ind, 1]
+
+            # want trunc norm probability of latent variable value for item_ind
+            # in period t+1
+
+
+            # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+            #                               a=temp_lower,
+            #                               b=Inf,
+            #                               mean = temp_mean,
+            #                               sd = 1)
+
+            tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
+
+            temp_tnorm_prob <- fastnormdens(temp_ztp1,
+                                            mean = tempmeanfordens,
+                                            sd = 1)
+
+            # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+            #                          mean = temp_mean,
+            #                          sd = 1)
+
+            temp_mean <- intersectmat[k_ind, 1]
+
+
+
+            # now second term
+
+
+            temp_lower2 <- intersectmat[k_ind, 2]
+            temp_upper2 <- intersectmat[k_ind, 3]
+
+
+
+
+            # print("temp_lower2 = ")
+            # print(temp_lower2)
+            #
+            # print("temp_lower3 = ")
+            # print(temp_lower3)
+            #
+            # print("temp_upper2 = ")
+            # print(temp_upper2)
+            #
+            # print("temp_upper3 = ")
+            # print(temp_upper3)
+
+
+            if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+              # intervals do not overlap, therefore assign probability zero
+              # and skip to next iteration
+
+
+              # print("k_ind = ")
+              # print(k_ind)
+
+              # print("ncol(temp_region_probs) = ")
+              # print(ncol(temp_region_probs))
+
+              # print("nrow(temp_region_probs) = ")
+              # print(nrow(temp_region_probs))
+
+
+              # these three lines are technically unnecessary
+              probmattemp[, k_ind] <- rep(0,num_regions_tmin1)
+              tempbounds[k_ind, 1] <- NA
+              tempbounds[k_ind, 2] <- NA
+
+              next
+
+            }
+
+
+            temp_lower2 <- max(temp_lower2, temp_lower3)
+            temp_upper2 <- min(temp_upper2, temp_upper3)
+
+            if(temp_lower2 > temp_upper2){
+
+              print("as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+
+              print(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+                                       n.item*(indiv - 1) +
+                                       1:n.item])
+
+              print("item_ind = ")
+              print(item_ind)
+
+              print("rankvec_t = ")
+              print(rankvec_t)
+
+              stop("Line 1581 temp_lower2 > temp_upper2")
+            }
+
+
+            for(k0_ind in 1:num_regions_tmin1){
+
+              #loop over all possible means
+              temp_mean2 <- intersectmat_tmin1[k0_ind,1]
+
+              # probability of being in intersection region
+
+              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+              # probmattemp[k0_ind, k_ind] <- prob_t_region*
+              #   temp_tnorm_prob *
+              #   intersectmat_tmin1[k0_ind,4]
+
+              probmattemp[k0_ind, k_ind] <- temp_tnorm_prob *
+                intersectmat_tmin1[k0_ind,4]
+
+              if(probmattemp[k0_ind, k_ind] <0){
+                print("probmattemp[k0_ind, k_ind] = ")
+                print(probmattemp[k0_ind, k_ind])
+
+                # print("prob_t_region = ")
+                # print(prob_t_region)
+
+                print("temp_tnorm_prob = ")
+                print(temp_tnorm_prob)
+
+                print("intersectmat[k0_ind,4] = ")
+                print(intersectmat[k0_ind,4])
+
+                print("temp_upper2 = ")
+                print(temp_upper2)
+
+                print("temp_lower2 = ")
+                print(temp_lower2)
+
+                print("temp_mean2 = ")
+                print(temp_mean2)
+
+
+              }
+
+
+            } # end loop over k0
+
+            # save upper and lower bounds (mean saved in intersectmat)
+            # or just obtain again later
+
+            tempbounds[k_ind,1] <- temp_lower2
+            tempbounds[k_ind,2] <- temp_upper2
+
+
+          } # end loop over k1
+
+
+          #sample a combination of k0 and k1
+          # if necessary can use column sums to sample k1, then k0
+          # however, this is probably unnecessary
+
+
+          # print("Line 1621 before sample")
+
+          region_ind <- sample.int(num_regions_tmin1*num_regions,
+                                   size = 1,
+                                   replace = TRUE,
+                                   prob = as.vector(probmattemp))
+
+
+          # print("Line 1629 after sample")
+
+          # k0 region is sampled number modulo number of regions in period 1
+          k0_region_ind <- ((region_ind -1) %% num_regions_tmin1 ) + 1
+          # if(k0_region_ind ==0){
+          #   k0_region_ind <- num_regions
+          # }
+
+          # k1 region is the ceiling of sampled number divided by number of regions in period 1
+          # k1_region_ind <- ceiling(region_ind/num_regions)
+          k1_region_ind <- (region_ind -1) %/% num_regions_tmin1 + 1
+
+
+          # print("k1_region_ind = ")
+          # print(k1_region_ind)
+
+          temp_lower2 <- tempbounds[k1_region_ind,1]
+          temp_upper2 <- tempbounds[k1_region_ind,2]
+
+          # print("num_regions = ")
+          # print(num_regions)
+          #
+          # print("region_ind = ")
+          # print(region_ind)
+          #
+          # print("k0_region_ind = ")
+          # print(k0_region_ind)
+
+          temp_mean0 <- intersectmat_tmin1[k0_region_ind, 1]
+          temp_mean0 <- (temp_mean0 + 0.5)*(max_resp - min_resp) + min_resp
+
+          # print("temp_mean0 = ")
+          # print(temp_mean0)
+          #
+          # print("temp_lower2 = ")
+          # print(temp_lower2)
+          #
+          # print("temp_upper2 = ")
+          # print(temp_upper2)
+
+          zdraw_temp <- rtruncnorm(n = 1,
+                                   a = temp_lower2,
+                                   b = temp_upper2,
+                                   mean = temp_mean0,
+                                   sd = 1)
+
+
+          Z.mat[item_ind,  indiv ] <- zdraw_temp
+
+
+          #### Begin Loop over time ###################
+
+          # loop over time periods for general case 1 < t < T
+
+          for(t in 2:(n.time - 1)){
+
+
+            if(itemcovars == TRUE){
+              list_item_intersectmats <- Biglist_list_item_intersectmats[[t+1]]
+              list_item_intersectmats_tmin1 <- Biglist_list_item_intersectmats[[t]]
+
+
+              intersectmat <- list_item_intersectmats[[index_item]]
+              intersectmat_tmin1 <- list_item_intersectmats_tmin1[[index_item]]
+            }else{
+              intersectmat <- Biglist_intersectmats[[t+1]]
+              intersectmat_tmin1 <- Biglist_intersectmats[[t]]
+            }
+
+            num_regions <- nrow(intersectmat)
+
+            temp_ztpmin1 <- as.vector(Z.mat)[(t-2)*n.item*n.ranker+
+                                               n.item*(indiv - 1) +
+                                               item_ind]
+
+
+            # must find mean corresponding to z in period t-1
+            # This will be used in and after the loop over regions.
+            # can directly obtain from dbarts
+            # or find region
+            # and use already saved region mean values
+
+
+            # must find last lower bound that temp_ztpmin1 is greater than
+            # or first upper bound that temp_ztpmin1 is below
+            ktemp_tmin1 <- which((temp_ztpmin1 < intersectmat_tmin1[, 3]) )[1]
+            # Then obtain the corresponding region mean value
+            temp_mean2 <- intersectmat_tmin1[ktemp_tmin1,1]
+
+            # print("temp_mean2 = ")
+            # print(temp_mean2)
+            #
+            # print("ktemp_tmin1 = ")
+            # print(ktemp_tmin1)
+
+
+
+            # Calculate the probabilities for each region in this time period
+            # the regions being looped over are actually period t+1 regions
+
+            # Same regions for all time periods if there are no time varying covariates
+
+            # However, the weights are individual and time period specific
+
+            # loop through regions
+
+
+            # first column is the probabilities
+            # second column is the lower bounds
+            # third column is the upper bounds
+            temp_region_probs <- matrix(0,
+                                        nrow = nrow(intersectmat),
+                                        ncol = 3)
+
+            # Trunc norm prob of next periods latent value conditional on region
+
+            # Create intervals from interval t+1 latent values
+
+            # rankvec_tp1 <- ranks_mat[,  (t)*n.ranker + indiv]
+            #
+            # # inds for j ranked below i in t+1
+            #
+            # belowrank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t+1
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower <- -Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #   temp_lower <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t+1
+            #
+            # aboverank_ind <- which(rankvec_tp1 == rankvec_tp1[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t+1
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper <- Inf
+            # }else{
+            #   # Check that this is the period t+1 latent variable value, not period t
+            #
+            #   temp_upper <- as.vector(Z.mat)[t*n.item*n.ranker+
+            #                                    n.item*(indiv - 1) +
+            #                                    aboverank_ind]
+            # }
+
+
+            # want trunc norm probability of latent variable value for item_ind
+            # in period t+1
+
+            temp_ztp1 <- as.vector(Z.mat)[t*n.item*n.ranker+
+                                            n.item*(indiv - 1) +
+                                            item_ind]
+
+            temppaircomps <- pair.comp.ten[, , (t-1)*n.ranker + indiv]
+
+            tempz <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                        n.item*(indiv - 1) +
+                                        1:n.item]
+
+            set1 = which( temppaircomps[item_ind, ] == 1)
+            set0 = which( temppaircomps[item_ind, ] == 0)
+
+            if(length(set1) > 0){
+              temp_upper3 = min(tempz[set1])
+            }else{
+              temp_upper3 = Inf
+            }
+
+            if(length(set0) > 0){
+              temp_lower3 = max(tempz[set0])
+            }else{
+              temp_lower3 = -Inf
+            }
+
+
+            # rankvec_t <- ranks_mat[,  (t-1)*n.ranker + indiv]
+            #
+            # # if(any(order(rankvec_t) !=
+            # #    order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                           n.item*(indiv - 1) +
+            # #                           1:n.item]) )){
+            # #
+            # #   print("order(rankvec_t) = ")
+            # #   print(order(rankvec_t))
+            # #
+            # #   print("order(as.vector(Z.mat)[(1-1)*n.item*n.ranker +
+            # #                         n.item*(indiv - 1) +
+            # #                         1:n.item])  = ")
+            # #
+            # #   print(order(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                                  n.item*(indiv - 1) +
+            # #                                  1:n.item]) )
+            # #
+            # #   print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                                n.item*(indiv - 1) +
+            # #                                1:n.item] = ")
+            # #
+            # #   print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            # #                            n.item*(indiv - 1) +
+            # #                            1:n.item])
+            # #
+            # #
+            # # }
+            #
+            #
+            #
+            #
+            #
+            # # inds for j ranked below i in t
+            #
+            # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+            #
+            # #max of latent variables for j ranked below i in t
+            # # Z.mat
+            #
+            # if(length(belowrank_ind) ==0){
+            #   temp_lower3 <- -Inf
+            # }else{
+            #   temp_lower3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                                     n.item*(indiv - 1) +
+            #                                     belowrank_ind]
+            # }
+            #
+            # # inds for j ranked above i in t
+            #
+            # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+            #
+            # #min of latent variables for j ranked below i in period t
+            #
+            # if(length(aboverank_ind) ==0){
+            #   temp_upper3 <- Inf
+            # }else{
+            #   temp_upper3 <- as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+            #                                     n.item*(indiv - 1) +
+            #                                     aboverank_ind]
+            # }
+
+
+
+            for(k_ind in 1:num_regions){
+
+
+
+              # obtain mean for truncated normal distribution
+              temp_mean <- intersectmat[k_ind, 1]
+
+
+
+              # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
+              #                               a=temp_lower,
+              #                               b=Inf,
+              #                               mean = temp_mean,
+              #                               sd = 1)
+
+              tempmeanfordens <- (temp_mean + 0.5)*(max_resp - min_resp) + min_resp
+
+              temp_tnorm_prob <- fastnormdens(temp_ztp1,
+                                              mean = tempmeanfordens,
+                                              sd = 1)
+
+              # temp_tnorm_prob <- fastnormdens(temp_ztp1,
+              #                          mean = temp_mean,
+              #                          sd = 1)
+
+
+              # Probability of z_t in intersection of
+              # region k_ind (for period t+1)
+              # and region defined by period t latent variables for other individuals
+              # and rank for period t
+
+
+              # tildeC_ktminl corresponds to
+              # period t+1 k_ind region intereval
+
+              temp_lower2 <- intersectmat[k_ind, 2]
+              temp_upper2 <- intersectmat[k_ind, 3]
+
+
+
+              # print("temp_lower2 = ")
+              # print(temp_lower2)
+              #
+              # print("temp_upper2 = ")
+              # print(temp_upper2)
+              #
+              # print("temp_lower3 = ")
+              # print(temp_lower3)
+              #
+              # print("temp_upper3 = ")
+              # print(temp_upper3)
+
+
+              if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
+                # intervals do not overlap, therefore assign probability zero
+                # and skip to next iteration
+
+                # print("k_ind = ")
+                # print(k_ind)
+
+                # print("ncol(temp_region_probs) = ")
+                # print(ncol(temp_region_probs))
+
+                # print("nrow(temp_region_probs) = ")
+                # print(nrow(temp_region_probs))
+
+                temp_region_probs[k_ind, 1] <- 0
+                temp_region_probs[k_ind, 2] <- NA
+                temp_region_probs[k_ind, 3] <- NA
+
+
+                next
+              }
+
+
+
+              temp_lower2 <- max(temp_lower2, temp_lower3)
+              temp_upper2 <- min(temp_upper2, temp_upper3)
+
+
+              if(temp_lower2 > temp_upper2){
+
+                print("as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                              n.item*(indiv - 1) +
+                                              1:n.item]")
+                print(as.vector(Z.mat)[(t-1)*n.item*n.ranker +
+                                         n.item*(indiv - 1) +
+                                         1:n.item])
+                print("item_ind = ")
+                print(item_ind)
+
+                print("rankvec_t = ")
+                print(rankvec_t)
+
+
+                print("temp_lower2 = ")
+                print(temp_lower2)
+
+                print("temp_upper2 = ")
+                print(temp_upper2)
+
+                stop("Line 1917. temp_lower2 > temp_upper2")
+              }
+
+
+
+              # probability of being in intersection region
+
+              # prob_t_region <- pnorm(temp_upper2 - temp_mean2) - pnorm(temp_lower2 - temp_mean2)
+
+
+              # print("temp_upper2 = ")
+              # print(temp_upper2)
+              # print("temp_lower2 = ")
+              # print(temp_lower2)
+              #
+              # print("temp_mean2 = ")
+              # print(temp_mean2)
+              #
+              #
+              # print("prob_t_region = ")
+              # print(prob_t_region)
+              #
+              # print("temp_tnorm_prob = ")
+              # print(temp_tnorm_prob)
+
+              # prob_t_region <- prob_t_region*temp_tnorm_prob
+              prob_t_region <- temp_tnorm_prob
+
+              # save region probability
+
+              # and save region bounds (or maybe more memory efficient to obtain the region again)
+
+              # must multiply by other previously obtained probabilities
+
+              # print("prob_t_region = ")
+              # print(prob_t_region)
+
+              temp_region_probs[k_ind, 1] <- prob_t_region
+              temp_region_probs[k_ind, 2] <- temp_lower2
+              temp_region_probs[k_ind, 3] <- temp_upper2
+
+
+            }
+
+
+            # sample a region using probabilities obtained above
+
+            # print("Line 1903 before sample")
+
+            region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+
+            # print("Line 1914 after sample")
+
+            temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+            zdraw_temp <- rtruncnorm(n = 1,
+                                     a=temp_region_probs[region_ind, 2],
+                                     b=temp_region_probs[region_ind, 3],
+                                     mean = temp_mean2_origscale,
+                                     sd = 1)
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_probs[region_ind, 2],
+            #                          b=temp_region_probs[region_ind, 3],
+            #                          mean = temp_mean2,
+            #                          sd = 1)
+
+
+
+            Z.mat[item_ind, (t - 1)*n.ranker + indiv ] <- zdraw_temp
+
+
+
+          } # end loop over time periods
+
+          # check for special cases for n.time - 1, n.time - 2, n.time - 3
+
+          # special case for t = n.time
+
+
+          if(itemcovars == TRUE){
+            # list_item_intersectmats <- Biglist_list_item_intersectmats[[t+1]]
+            list_item_intersectmats_tmin1 <- Biglist_list_item_intersectmats[[n.time]]
+
+
+            # intersectmat <- list_item_intersectmats[[index_item]]
+            intersectmat_tmin1 <- list_item_intersectmats_tmin1[[index_item]]
+          }else{
+            # intersectmat <- Biglist_intersectmats[[t+1]]
+            intersectmat_tmin1 <- Biglist_intersectmats[[n.time]]
+          }
+
+          num_regions <- nrow(intersectmat)
+
+          temp_ztpmin1 <- as.vector(Z.mat)[(n.time-2)*n.item*n.ranker+
+                                             n.item*(indiv - 1) +
+                                             item_ind]
+
+
+          # must find mean corresponding to z in period t-1
+          # This will be used in and after the loop over regions.
+          # can directly obtain from dbarts
+          # or find region
+          # and use already saved region mean values
+
+
+          # must find last lower bound that temp_ztpmin1 is greater than
+          # for first upper bound that temp_ztpmin1 is below
+          ktemp_tmin1 <- which(temp_ztpmin1 < intersectmat_tmin1[, 3])[1]
+          # Then obtain the corresponding region mean value
+          temp_mean2 <- intersectmat_tmin1[ktemp_tmin1,1]
+
+          # now find interval
+
+
+          # tildeC_ktminl corresponds to
+          # period t+1 k_ind region intereval
+
+
+          temppaircomps <- pair.comp.ten[, , (n.time-1)*n.ranker + indiv]
+
+          tempz <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+                                      n.item*(indiv - 1) +
+                                      1:n.item]
+
+          set1 = which( temppaircomps[item_ind, ] == 1)
+          set0 = which( temppaircomps[item_ind, ] == 0)
+
+          if(length(set1) > 0){
+            temp_upper3 = min(tempz[set1])
+          }else{
+            temp_upper3 = Inf
+          }
+
+          if(length(set0) > 0){
+            temp_lower3 = max(tempz[set0])
+          }else{
+            temp_lower3 = -Inf
+          }
+
+
+          # rankvec_t <- ranks_mat[,  (n.time-1)*n.ranker + indiv]
+          #
+          # # inds for j ranked below i in T
+          #
+          # belowrank_ind <- which(rankvec_t == rankvec_t[item_ind] - 1 )
+          #
+          # #max of latent variables for j ranked below i in T
+          # # Z.mat
+          #
+          # if(length(belowrank_ind) ==0){
+          #   temp_lower3 <- -Inf
+          # }else{
+          #   temp_lower3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     belowrank_ind]
+          # }
+          #
+          # # inds for j ranked above i in T
+          #
+          # aboverank_ind <- which(rankvec_t == rankvec_t[item_ind] + 1)
+          #
+          # #min of latent variables for j ranked below i in period T
+          #
+          # if(length(aboverank_ind) ==0){
+          #   temp_upper3 <- Inf
+          # }else{
+          #
+          #   temp_upper3 <- as.vector(Z.mat)[(n.time-1)*n.item*n.ranker +
+          #                                     n.item*(indiv - 1) +
+          #                                     aboverank_ind]
+          # }
+
+
+          temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+
+          # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
+
+          zdraw_temp <- rtruncnorm(n = 1,
+                                   a = temp_lower3,
+                                   b = temp_upper3,
+                                   mean = temp_mean2_origscale,
+                                   sd = 1)
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower3,
+          #                          b = temp_upper3,
+          #                          mean = temp_mean2,
+          #                          sd = 1)
+
+
+          Z.mat[item_ind, (n.time -1)*n.ranker + indiv ] <- zdraw_temp
+
+
+
+
+
+        } # end loop over items
+
+
+
+      } # end loop over individuals indiv in 1:n.ranker
+
+    }
+
+
+
+
+    # print("Line 4843")
+
+
+    ##################### Old Code for Latent outcome samples ##################################################################
+    #
+    #
+    #     if(nrow(X.train)==n.item){
+    #       stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #
+    #       #each n.ranker values of u should be equal,
+    #       #so just take one mu value from each of these
+    #       #this keeps the dimension of mu equal to n.item
+    #       #so a new Gibbs sampler update does not have to be written for Z
+    #       Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
+    #                                            weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
+    #
+    #       if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+    #
+    #     }else{
+    #       if(nrow(X.train)==n.item*n.ranker*n.time){
+    #
+    #         if(seq_z_draws==1){
+    #           for(t in 1:n.time){
+    #
+    #             # update mu for period t-1
+    #
+    #             #Zlag always zero in period t==0
+    #
+    #             # Z in period 0 is unaffected since set to zero by default
+    #             #thereofre mu unaffected in period 0 (can draw anyway for now)
+    #
+    #             if(t==1){
+    #
+    #               # print("t = ")
+    #               # print(t)
+    #               # print("mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] = ")
+    #               # print(mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)])
+    #
+    #               mu[1:(n.item*n.ranker)] <- samplestemp$train[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker),1]  #sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #               # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #               #                                                                             ncol =  ncol(X.train) + num_lags ,
+    #               #                                                                             byrow = TRUE )))
+    #               # mu[1:(n.item*n.ranker)] <- sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #
+    #             }else{
+    #               mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] <-  samplestemp$train[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker),1] # sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #
+    #               # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = cbind(Zlag.mat , matrix( rep( t( X.train ) , n.ranker ) ,
+    #               #                                                                             ncol =  ncol(X.train) + num_lags ,
+    #               #                                                                             byrow = TRUE )))
+    #               # mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)] <-  sampler$predict(df_for_dbart[1:(n.item*n.ranker),])
+    #             }
+    #
+    #
+    #
+    #             Z.mat[,(t-1)*n.ranker + 1:n.ranker] <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten[, , (t-1)*n.ranker + 1:n.ranker],
+    #                                                                                     Z.mat = Z.mat[,(t-1)*n.ranker + 1:n.ranker],
+    #                                                                                     mu = mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)],
+    #                                                                                     weight.vec = rep(1, n.ranker),
+    #                                                                                     n.ranker = n.ranker,
+    #                                                                                     n.item = n.item)
+    #
+    #             #update mu for period t to be used as lag for next period
+    #             #require that this is consistent with the tree structure
+    #
+    #
+    #             Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+    #
+    #             for(t1 in 1:num_lags){
+    #               init_Z_t0 <- rep(0, t1*n.item*n.ranker)
+    #               # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+    #
+    #               Zlag.mat[,t1] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t1)*n.item*n.ranker)])
+    #
+    #             }
+    #
+    #             condition <- 1
+    #
+    #             for(j in 1:num_lags){
+    #               # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #               #perhaos this can be edited so that only the relevant time period is updated withinthte lag vector
+    #               condition <- condition*(1-(sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE))
+    #
+    #             }
+    #             while (condition==0) {
+    #               # print("t = ")
+    #               # print(t)
+    #               # print("new z values not consistent with tree structure, must draw again")
+    #
+    #
+    #               #perhaps this can be rewritten to just re-draw the relevant column?
+    #               Z.mat[,(t-1)*n.ranker + 1:n.ranker] <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten[, , (t-1)*n.ranker + 1:n.ranker],
+    #                                                                                       Z.mat = Z.mat[,(t-1)*n.ranker + 1:n.ranker],
+    #                                                                                       mu = mu[(t-1)*(n.item*n.ranker) + 1:(n.item*n.ranker)],
+    #                                                                                       weight.vec = rep(1, n.ranker),
+    #                                                                                       n.ranker = n.ranker,
+    #                                                                                       n.item = n.item )
+    #
+    #               Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+    #
+    #               for(t1 in 1:num_lags){
+    #                 init_Z_t0 <- rep(0, t1*n.item*n.ranker)
+    #                 # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+    #
+    #                 Zlag.mat[,t1] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t1)*n.item*n.ranker)])
+    #
+    #               }
+    #
+    #               condition <- 1
+    #
+    #               for(j in 1:num_lags){
+    #                 # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #                 #perhaos this can be edited so that only the relevant time period is updated withinthte lag vector
+    #                 condition <- condition*(1-(sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE))
+    #
+    #               }
+    #
+    #
+    #
+    #             }
+    #           }#end of loop over t
+    #
+    #           #end of seq_z_draws==1 code
+    #         }else{
+    #           Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
+    #                                                     Z.mat = Z.mat,
+    #                                                     mu = mu,
+    #                                                     weight.vec = rep(1, n.ranker*n.time),
+    #                                                     n.ranker = n.ranker*n.time,
+    #                                                     n.item = n.item )
+    #
+    #         }
+    #
+    #
+    #       }else{
+    #         stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+    #       }
+    #     }
+
+    ##################### END Old Code for Latent outcome samples ##################################################################
+
+
+    # print("Line 4424")
+
+    # update training and test data Z values
+
+    #training data update is straightforward, just use new draws of Z.mat
+    Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+    for(t in 1:num_lags){
+      init_Z_t0 <- rep(0, t*n.item*n.ranker)
+      # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+      Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+    }
+
+
+
+    #update test data later in code?
+
+    #test data update requires predictions of mu in test data and noise added to these predictions.
+    #in addition to using the new Zmat values
+
+    # Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+    #
+    # if(nrow(X.test) >0 ){
+    #
+    #   #two options
+    #   #use predictions of unobservable Z lag values from previous iteration
+    #   #or iterate through to obtain new predictions.
+    #   draw$mu_test[,iter-1]
+    #
+    #   for(t in 1:num_lags){
+    #     # if(t==1){
+    #     #   #repeating the last period values
+    #     #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+    #     #
+    #     #   #other option is to set all unobservable values to zero
+    #     #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #     #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     #
+    #     #
+    #     # }else{
+    #
+    #     if(num_test_periods > t ){
+    #       #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+    #
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                                  (num_test_periods-t) )  )
+    #
+    #       #other option is to set all unobservable values to zero
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     }else{
+    #       #nothing to fill in if num_test_periods <= t
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+    #
+    #     }
+    #
+    #
+    #     # }
+    #   }
+    # }
+
+    # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    #
+    # temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+    #
+    # temp_mu_test <- rep(NA,  nrow(Xmat.test) )
+    #
+    # for(t1 in 1:num_test_periods){
+    #   #produce a prediction
+    #   testpredvec <- sampler$predict(as.data.frame(temp_test_mat))
+    #
+    #   #fill in temp_test_preds with noise
+    #   temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+    #
+    #
+    #   #update temp_test_mat
+    #   #shift z columns to the right and fill in leftmost column
+    #
+    #   #need to rewrite this if want to allow for no observed covariates
+    #
+    #   temp_test_mat <-  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] )
+    #
+    #
+    #
+    #   #fill in temp_mu_test without noise
+    #   temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+    #
+    #
+    # }
+    #
+    # #also update Zlag.mat.test ?
+    # #perhaps this is unnecessary here?
+    #
+    #
+    # Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+    #
+    # if(nrow(X.test) >0 ){
+    #   for(t in 1:num_lags){
+    #     # if(t==1){
+    #     #   #repeating the last period values
+    #     #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+    #     #
+    #     #   #other option is to set all unobservable values to zero
+    #     #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #     #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #     #
+    #     #
+    #     # }else{
+    #
+    #     if(num_test_periods > t ){
+    #       #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+    #
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                              as.vector(temp_test_mat)[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+    #
+    #
+    #
+    #     }else{
+    #       #nothing to fill in if num_test_periods <= t
+    #       Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+    #
+    #     }
+    #
+    #
+    #     # }
+    #   }
+    # }
+
+
+
+
+
+    #THEN use SetPredictor
+
+    # if (i <= n_warmup) {
+    #   for(j in 1:num_lags){
+    #     sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    #     }
+    # } else{
+    temp_break <- 0
+    for(j in 1:num_lags){
+      # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+
+      while (sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE) {
+
+        if(seq_z_draws==1){
+          stop("updates still not consistent with tree structure")
+        }
+        print("new z values not consistent with tree structure, must draw again")
+
+        # If this error message occurs
+        # Check the conditions in the dbart package for setPredictor == FALSE
+        # And if this is hypothetically possible, even with draws from the smoothing distribution,
+        # and if it is not a bug
+        # then need to go back to beginning of this iteration of the Gibbs sampler
+        # and sample Zmat again
+
+
+        temp_break <- 1
+        break
+        # stop("new z values not consistent with tree structure, must draw again")
+
+
+        # #perhaps this can be rewritten to just re-draw the relevant column?
+        # Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
+        #                                           Z.mat = Z.mat,
+        #                                           mu = mu,
+        #                                           weight.vec = rep(1, n.ranker*n.time),
+        #                                           n.ranker = n.ranker*n.time,
+        #                                           n.item = n.item )
+        #
+        # Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+        #
+        # for(t in 1:num_lags){
+        #   init_Z_t0 <- rep(0, t*n.item*n.ranker)
+        #   # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+        #
+        #   Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+        #
+        # }
+        #
+        # #check that Zmat and  Zlag.mat are updated outside the while loop and for-loop over j
+
+      }
+
+      if(temp_break==1){
+        break
+      }
+    }
+
+    # if need to draw z values again, go back to start of loop
+    if(temp_break==1){
+      if(breakcount == 10){
+        Z.mat <- Z.matold
+        Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+
+        for(t in 1:num_lags){
+          init_Z_t0 <- rep(0, t*n.item*n.ranker)
+          # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+
+          Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+
+        }
+
+      }else{
+        breakcount <- breakcount +1
+        next
+      }
+
+    }
+
+    breakcount <- 0
+    # }
+
+    # if(nrow(X.test)>0){
+    #
+    #
+    #   for(j in 1:num_lags){
+    #
+    #     #perhaps this should be removed for when Z is updated properly below
+    #     sampler$setTestPredictor(x = Zlag.mat.test[,j], column = j)
+    #
+    #   }
+    #
+    # }
+
+    #//////////////////////////////////////////////////////////////////////////
+    #
+    #
+    #
+    #//////////////////////////////////////////////////////////////////////////
+
+    # update Z.mat given (alpha, beta) or equivalently mu
+
+    # update (alpha, beta) or equivalently mu
+    # omitting the theta step for now,
+    # although this would ideally be edited for BART and included to speed up convergence
+
+
+
+    #
+    # mean.para.update = GibbsUpMuGivenLatentGroup(Z.mat = Z.mat, X.mat = X.mat, weight.vec = rep(1, n.ranker),
+    #                                              sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+    #                                              n.ranker = n.ranker, n.item = n.item,
+    #                                              p.cov = p.cov, para.expan = para.expan)
+    #
+    #     ### for check only
+    #     Z.mat = Z.mat/mean.para.update$theta
+    #
+    #     alpha = mean.para.update$alpha
+    #     beta = mean.para.update$beta
+
+    # mu = as.vector( alpha + X.mat %*% beta )
+    #
+    # # update hyper para sigma2.alpha and sigma2.beta
+    # sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+    # if(p.cov > 0){
+    #   sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+    # }
+
+    ##################### Sample sum-of-trees ##################################################
+
+
+    #set the response.
+    #Check that 0 is a reasonable initial value
+    #perhaps makes more sense to use initial values of Z
+    sampler$setResponse(y = as.vector(Z.mat))
+    # sampler$setSigma(sigma = 1)
+    #sampler$setPredictor(x= df_for_dbart$x, column = 1, forceUpdate = TRUE)
+
+    min_resp <- min(as.vector(Z.mat))
+    max_resp <- max(as.vector(Z.mat))
+    if(sparse){
+      tempmodel <- sampler$model
+      tempmodel@tree.prior@splitProbabilities <- s_y
+      sampler$setModel(newModel = tempmodel)
+    }
+    #mu = as.vector( alpha + X.mat %*% beta )
+    samplestemp <- sampler$run()
+
+    mutemp <- samplestemp$train[,1]
+    #suppose there are a number of samples
+    if(sparse){
+      tempcounts <- fcount(sampler$getTrees()$var)
+      tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y[tempcounts$x] <- tempcounts$N
+    }
+    # mutemp <- sampler$predict(df_for_dbart)
+    # print("sigma = ")
+    # print(samplestemp$sigma)
+
+    # mu = mutemp
+
+    if(nrow(X.train)==n.item){
+      #each n.ranker values of u should be equal,
+      #so just take one mu value from each of these
+      #this keeps the dimension of mu equal to n.item
+      #so a new Gibbs sampler update does not have to be written for Z
+
+      #mu = mutemp[(1:n.item)]
+      mu = mutemp[n.item+(1:n.item)]
+
+
+
+
+      # if(mutemp[1]!= mutemp[n.item+1]){
+      if(mutemp[n.item+1]!= mutemp[n.item+n.item+1]){
+        print("iteration number")
+        print(iter)
+        print("n.item = ")
+        print(n.item)
+        print("mutemp = ")
+        print(mutemp)
+        stop("mutemp[1]!= mutemp[n.item+1]")
+      }
+
+
+      #mu = mutemp[(1:n.item)*n.ranker]
+    }else{
+      if(nrow(X.train)==n.item*n.ranker*n.time){
+        mu = mutemp
+      }else{
+        stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
+      }
+
+    }
+
+
+    if (sparse & (iter > floor(n.burnin * 0.5))) {
+      # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+      # s_z <- s_update_z[[1]]
+
+      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+      s_y <- s_update_y[[1]]
+
+      if(alpha_split_prior){
+        # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+      }
+    }
+
+
+    ##################### Store iteration output ##################################################
+
+
+    # store value at this iteration
+    if(keep_zmat==TRUE){
+      draw$Z.mat[,,iter] = Z.mat
+      draw$Z.mat.test[,,iter] = Z.mat.test
+
+    }
+    # draw$alpha[,iter] = alpha
+    # draw$beta[,iter] = beta
+    draw$mu[,iter] = mu
+    # draw$sigma2.alpha[iter] = sigma2.alpha
+    # draw$sigma2.beta[iter] = sigma2.beta
+
+
+
+    #
+    #     # if(is.null(initial.list)){
+    #     # print("samplestemp$test[,1] = ")
+    #     # print(samplestemp$test[,1])
+    #
+    #     # mupreds <- sampler$predict(df_for_dbart)
+    #
+    #     # Xmat.test[,1:num_lags] <-  Zlag.mat.test
+    #
+    #
+    #     temp_test_mat <- matrix(NA, nrow = n.item*n.ranker,ncol = ncol(df_for_dbart_test))
+    #
+    #     for(t  in 1:num_lags){
+    #       if(noise_in_pred ==1){
+    #         temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+    #       }else{
+    #         temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+    #       }
+    #
+    #     }
+    #
+    #     # temp_test_mat[, (num_lags+1):ncol(Xmat.test)] <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,
+    #     #                                                                      (num_lags+1):ncol(Xmat.test)])
+    #
+    #     temp_test_mat <- data.frame(x = temp_test_mat)
+    #     colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+    #
+    #     # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    #
+    #     temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+    #
+    #     print("Line 5488")
+    #
+    #
+    #     temp_mu_test <- rep(NA,  nrow(df_for_dbart_test) )
+    #
+    #
+    #     # if(iter < 5){
+    #     #   print("temp_test_mat = " )
+    #     #   print(temp_test_mat)
+    #     # }
+    #
+    #     for(t1 in 1:num_test_periods){
+    #       #produce a prediction
+    #
+    #       # must use original column names to prevent an error in the predict function
+    #       colnames(temp_test_mat) <- colnames(df_for_dbart_test)
+    #
+    #       testpredvec <- sampler$predict(temp_test_mat)
+    #
+    #       #fill in temp_test_preds with noise
+    #       if(noise_in_pred ==1){
+    #         temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+    #       }else{
+    #         temp_test_preds[ , t1] <- testpredvec #+ rnorm( n.item*n.ranker )
+    #       }
+    #
+    #
+    #       #update temp_test_mat
+    #       #shift z columns to the right and fill in leftmost column
+    #
+    #       #need to rewrite this if want to allow for no observed covariates
+    #
+    #       # temp_test_mat <-  data.frame( x= cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ) )
+    #
+    #       if(t1 != num_test_periods){
+    #
+    #
+    #         if(num_lags ==1){
+    #           temp_test_mat <-  data.frame(  cbind(  temp_test_preds[ , t1] #,
+    #                                                  # as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),])
+    #           ))
+    #
+    #         }else{
+    #           temp_test_mat <-  data.frame(  cbind(  temp_test_preds[ , t1] ,
+    #                                                  temp_test_mat[,1:(num_lags-1)] #,
+    #                                                  # as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),])
+    #           ))
+    #
+    #         }
+    #       }
+    #
+    #       # colnames(temp_test_mat) <- colnames(Xmat.test)
+    #
+    #
+    #       #fill in temp_mu_test without noise
+    #       temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+    #
+    #
+    #     }
+    #
+    #     #also update Zlag.mat.test ?
+    #     #perhaps this is unnecessary here?
+    #
+    #     print("Line 5545")
+    #
+    #
+    #     Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+    #
+    #     # if(nrow(X.test) >0 ){
+    #     for(t in 1:num_lags){
+    #       # if(t==1){
+    #       #   #repeating the last period values
+    #       #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+    #       #
+    #       #   #other option is to set all unobservable values to zero
+    #       #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #       #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+    #       #
+    #       #
+    #       # }else{
+    #
+    #       if(num_test_periods > t ){
+    #         #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+    #
+    #         Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+    #                                as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+    #
+    #
+    #
+    #       }else{
+    #         #nothing to fill in if num_test_periods <= t
+    #         Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+    #
+    #       }
+    #
+    #
+    #       # }
+    #     }
+    #     # }
+    #
+    #     # if(nrow(X.test)>0){
+    #     #
+    #     #
+    #     #   for(j in 1:num_lags){
+    #     #
+    #     #     #perhaps this should be removed for when Z is updated properly below
+    #     #     sampler$setTestPredictor(x = Zlag.mat.test[,j], column = j)
+    #     #
+    #     #   }
+    #     #
+    #     # }
+    #
+    #
+    #     draw$mu_test[,iter] <- temp_mu_test
+    #     # draw$mu_test[,iter] <- samplestemp$test[,1]
+    #
+    #     if(keep_zmat==TRUE){
+    #       draw$Z.mat.test[,,iter]  <- matrix(data = as.vector(temp_test_preds), nrow = n.item, ncol = n.ranker*num_test_periods)
+    #     }
+    #
+    #     # draw$mu_test[,1] <- samplestemp$test[,1]
+    #
+    #     # }else{
+    #     #   draw$mu_test[,1] <- initial.list$mu_test
+    #     # }
+    #
+
+
+    if( nrow(X.test) > 0 ){
+
+
+      # if(is.null(initial.list)){
+      # print("samplestemp$test[,1] = ")
+      # print(samplestemp$test[,1])
+
+      # mupreds <- sampler$predict(Xmat.train)
+
+      # Xmat.test[,1:num_lags] <-  Zlag.mat.test
+
+
+      temp_test_mat <- matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+
+      for(t  in 1:num_lags){
+        if(noise_in_pred ==1){
+          # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+        }else{
+          # temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+          # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1)*n.item*n.ranker)]
+        }
+
+      }
+
+      temp_test_mat[, (num_lags+1):ncol(Xmat.test)] <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,
+                                                                           (num_lags+1):ncol(Xmat.test)])
+
+      temp_test_mat <- data.frame(x = temp_test_mat)
+      colnames(temp_test_mat) <- colnames(Xmat.test)
+
+      # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+
+      temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
+
+      temp_mu_test <- rep(NA,  nrow(Xmat.test) )
+
+
+      # if(iter < 5){
+      #   print("temp_test_mat = " )
+      #   print(temp_test_mat)
+      # }
+
+      for(t1 in 1:num_test_periods){
+        #produce a prediction
+        testpredvec <- sampler$predict(temp_test_mat)
+
+        #fill in temp_test_preds with noise
+        if(noise_in_pred ==1){
+          temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
+        }else{
+          temp_test_preds[ , t1] <- testpredvec #+ rnorm( n.item*n.ranker )
+        }
+
+
+        #update temp_test_mat
+        #shift z columns to the right and fill in leftmost column
+
+        #need to rewrite this if want to allow for no observed covariates
+
+        # temp_test_mat <-  data.frame( x= cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ) )
+
+        if(t1 != num_test_periods){
+
+
+          if(num_lags ==1){
+            temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
+                                                      as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,
+                                                                          (num_lags+1):(ncol(Xmat.test))]) ))
+
+          }else{
+            temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
+                                                      temp_test_mat[,1:(num_lags-1)] ,
+                                                      as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,
+                                                                          (num_lags+1):(ncol(Xmat.test))]) ))
+
+          }
+        }
+
+        colnames(temp_test_mat) <- colnames(Xmat.test)
+
+
+        #fill in temp_mu_test without noise
+        temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
+
+
+      }
+
+      #also update Zlag.mat.test ?
+      #perhaps this is unnecessary here?
+
+
+      Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
+
+      if(nrow(X.test) >0 ){
+        for(t in 1:num_lags){
+          # if(t==1){
+          #   #repeating the last period values
+          #   Zlag.mat.test[,t] <- rep(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],num_test_periods )
+          #
+          #   #other option is to set all unobservable values to zero
+          #   # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-1)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+          #   #                        rep(0,(num_test_periods-t)*n.item*n.ranker ))
+          #
+          #
+          # }else{
+
+          if(num_test_periods > t ){
+            #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
+
+            Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+                                   as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
+
+
+
+          }else{
+            #nothing to fill in if num_test_periods <= t
+            Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
+
+          }
+
+
+          # }
+        }
+      }
+
+      # if(nrow(X.test)>0){
+      #
+      #
+      #   for(j in 1:num_lags){
+      #
+      #     #perhaps this should be removed for when Z is updated properly below
+      #     sampler$setTestPredictor(x = Zlag.mat.test[,j], column = j)
+      #
+      #   }
+      #
+      # }
+
+
+      draw$mu_test[,iter] <- temp_mu_test
+      # draw$mu_test[,iter] <- samplestemp$test[,1]
+
+      if(keep_zmat==TRUE){
+        draw$Z.mat.test[,,iter]  <- matrix(data = as.vector(temp_test_preds), nrow = n.item, ncol = n.ranker*num_test_periods)
+      }
+
+      # draw$mu_test[,1] <- samplestemp$test[,1]
+
+      # }else{
+      #   draw$mu_test[,1] <- initial.list$mu_test
+      # }
+
+    }
+
+    if(sparse){
+      draw$alpha_s_y_store[iter] <- alpha_s_y
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter,] <- var_count_y
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter,] <- s_y
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
+
+
+    # if( nrow(X.test) >0 ){
+    #   draw$mu_test[,iter] <- samplestemp$test[,1]
+    # }
+
+
+    # print iteration number
+    if(iter %% print.opt == 0){
+      print(paste("Gibbs Iteration", iter))
+      # print(c(sigma2.alpha, sigma2.beta))
+    }
+
+
+    iter <- iter+1
+  }
+
+
+  return(draw)
+}
+
+
+
+
+
+
+
 ##////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ##////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
