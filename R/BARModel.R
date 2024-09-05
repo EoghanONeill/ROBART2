@@ -3191,13 +3191,13 @@ ARRObartNOCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
               upper_buffered <- temp_upper3
               lower_buffered <- temp_lower3
 
-              if(temp_upper3 != Inf){
-                upper_buffered <- temp_upper3 - 0.00001
-              }
-
-              if(temp_upper3 != -Inf){
-                lower_buffered <- temp_lower3 + 0.00001
-              }
+              # if(temp_upper3 != Inf){
+              #   upper_buffered <- temp_upper3 - 0.00001
+              # }
+              #
+              # if(temp_upper3 != -Inf){
+              #   lower_buffered <- temp_lower3 + 0.00001
+              # }
             }
 
             zdraw_temp <- rtruncnorm(n = 1,
@@ -4812,13 +4812,13 @@ ARRObartNOCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
               upper_buffered <- temp_upper3
               lower_buffered <- temp_lower3
 
-              if(temp_upper3 != Inf){
-                upper_buffered <- temp_upper3 - 0.00001
-              }
-
-              if(temp_lower3 != -Inf){
-                lower_buffered <- temp_lower3 + 0.00001
-              }
+              # if(temp_upper3 != Inf){
+              #   upper_buffered <- temp_upper3 - 0.00001
+              # }
+              #
+              # if(temp_lower3 != -Inf){
+              #   lower_buffered <- temp_lower3 + 0.00001
+              # }
 
 
             }
