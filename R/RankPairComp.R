@@ -284,7 +284,6 @@ ModKTau <- function(Rank1, Rank2, method = "kendall"){
       if(  ((Rank1[i] < Rank1[j]) & ( Rank2[i] > Rank2[j] ))  ){
         tempsum = tempsum + 1
       }
-
     }
   }
 

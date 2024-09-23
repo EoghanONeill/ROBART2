@@ -713,7 +713,8 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
                                       sparse = TRUE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
-                                      alpha_split_prior = TRUE){
+                                      alpha_split_prior = TRUE,
+                                      topkinit = FALSE){
 
 
   Num_lin_ess_samples <- 100
@@ -948,24 +949,35 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
     ## initial values for Z
     Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker*n.time)
     for(j in 1:(n.ranker*n.time)){
-
       pair.comp <- pair.comp.ten[,,j]
 
-      # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
-      # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+      if(topkinit == TRUE){
 
-      # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
-      # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+        up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
 
-      # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
-      # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+
+        # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+        # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+
+        # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+        # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+
+        # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
+        # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
 
 
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
 
-      # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
-      # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
-
+        # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
+        # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
+      }
     }
 
 
@@ -3280,7 +3292,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
                                         sparse = TRUE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
-                                        alpha_split_prior = TRUE){
+                                        alpha_split_prior = TRUE,
+                                        topkinit = FALSE){
 
 
   Num_lin_ess_samples <- 100
@@ -3510,20 +3523,31 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
       pair.comp <- pair.comp.ten[,,j]
 
-      # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
-      # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+      if(topkinit == TRUE){
 
-      # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
-      # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+        up.order = rank(-rowSums( pair.comp, na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
 
-      # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
-      # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
 
+      }else{
+        # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+        # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
 
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+        # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+        # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
 
-      # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
-      # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
+        # print("rank(-rowSums( pair.comp, na.rm = TRUE ) + 1) = ")
+        # print(rank(-rowSums( pair.comp, na.rm = TRUE ) + 1))
+
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+        # print("(c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)) = ")
+        # print((c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1)))
+      }
 
     }
 
@@ -3650,7 +3674,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -3899,7 +3923,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -11988,7 +12012,7 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -12302,7 +12326,7 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -20748,7 +20772,7 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -21062,7 +21086,7 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -31846,7 +31870,7 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -32160,7 +32184,7 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -35472,7 +35496,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -35721,7 +35745,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   # df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -38459,7 +38483,7 @@ ARRObartNOCovars <- function(pair.comp.ten,
 
 
 
-    print("Line 799.")
+    # print("Line 799.")
 
     df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -38617,7 +38641,7 @@ ARRObartNOCovars <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
-  print("Line 954")
+  # print("Line 954")
 
 
   df_for_dbart_test <- data.frame( x = Zlag.mat.test )
@@ -52615,7 +52639,8 @@ RObart <- function(pair.comp.ten,
                    alpha_a_y = 0.5,
                    alpha_b_y = 1,
                    alpha_split_prior = TRUE,
-                   n.burnin = floor(dim(pair.comp.ten)[1]/2)){
+                   n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                   topkinit = TRUE){
   ## store MCMC draws
 
   # print("begin function")
@@ -52696,7 +52721,22 @@ RObart <- function(pair.comp.ten,
     ## initial values for Z
     Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
     for(j in 1:n.ranker){
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      if(topkinit == TRUE){
+
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+
+
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      }
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
     }
 
     ## initial values
@@ -54326,7 +54366,8 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                                 num_test_periods = 0,
                                 keep_zmat = FALSE,
                                 noise_in_pred = 0,
-                                seq_z_draws = 1){
+                                seq_z_draws = 1,
+                                topkinit = FALSE){
   ## store MCMC draws
 
   # print("begin function")
@@ -54480,7 +54521,22 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
       #   qnorm(  tempsort$x   /(n.item+1)) +
       #   rnorm(n = 1, mean = 0, sd = 0.01) # add some noise to prevent splitting issues
 
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+      if(topkinit == TRUE){
+
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+
+
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      }
     }
 
     ## initial values
@@ -59043,7 +59099,8 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
                                       num_test_periods = 0,
                                       keep_zmat = FALSE,
                                       noise_in_pred = 0,
-                                      seq_z_draws = 1){
+                                      seq_z_draws = 1,
+                                      topkinit = FALSE){
   ## store MCMC draws
 
   # print("begin function")
@@ -59202,8 +59259,22 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
       # Z.mat[ tempsort$ix , j] <-
       #   qnorm(  tempsort$x   /(n.item+1)) +
       #   rnorm(n = 1, mean = 0, sd = 0.01) # add some noise to prevent splitting issues
+      if(topkinit == TRUE){
 
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+
+
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      }
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
     }
 
     ## initial values
@@ -63905,7 +63976,7 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
                                  updateState = FALSE,
                                  num_lags = 1,
                                  diff_num_test_rankers = 0,
-                                 keep_zmat = FALSE){
+                                 keep_zmat = FALSE, topkinit = TRUE){
   ## store MCMC draws
 
   # print("begin function")
@@ -63991,7 +64062,20 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
     ## initial values for Z
     Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
     for(j in 1:n.ranker){
-      Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      if(topkinit == TRUE){
+
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      }
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
     }
 
     ## initial values
