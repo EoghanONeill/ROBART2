@@ -2,6 +2,17 @@
 ### the prior for Z is normal with mean Z and variance 1/weight or equivalently standard deviance 1/sqrt(weight) ###
 GibbsUpLatentGivenRankInd <- function(pair.comp, Z, mu, weight){
   up.order = sort( rowSums( pair.comp, na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix
+
+  # if(!all(  rank(rowSums( pair.comp, na.rm = TRUE )) == rank(-Z))){
+  #   print(" rank(Z)= ")
+  #   print(rank(Z))
+  #
+  #   print("  rank(rowSums( pair.comp, na.rm = TRUE )) = ")
+  #   print(  rank(rowSums( pair.comp, na.rm = TRUE )) )
+  #
+  #   stop("not all ranks agree with z")
+  # }
+
   for(i in up.order){
 
     set1 = which( pair.comp[i, ] == 1)
@@ -20,6 +31,7 @@ GibbsUpLatentGivenRankInd <- function(pair.comp, Z, mu, weight){
     }
 
     Z[i] = rtruncnorm( 1, lower, upper, mean = mu[i], sd = 1/sqrt(weight) )
+
 
     if(is.na(Z[i])){
       print("set1 =")
@@ -43,6 +55,30 @@ GibbsUpLatentGivenRankInd <- function(pair.comp, Z, mu, weight){
       print(Z)
       stop("GibbsUpdate Line 44. stopping at NA value")
     }
+
+    # if((Z[i] < lower) | (Z[i] < lower)){
+    #   print("set1 =")
+    #   print(set1)
+    #   print("set0 =")
+    #   print(set0)
+    #   print("Z[i] is NA")
+    #   print("lower is")
+    #   print(lower)
+    #   print("upper is")
+    #   print(upper)
+    #   print("mu[i] is")
+    #   print(mu[i])
+    #   print("weight is")
+    #   print(weight)
+    #
+    #   print("i =")
+    #   print(i)
+    #
+    #   print("Z =")
+    #   print(Z)
+    #   stop("(Z[i] < lower) | (Z[i] < lower))")
+    # }
+
 
   }
   return(Z)
@@ -149,7 +185,7 @@ GibbsUpLatentGivenRankindividual <- function(pair.comp.ten, Z.mat, mu, weight.ve
                                              n.ranker = ncol(Z.mat),
                                              n.item = ncol(pair.comp.ten[,,1])){
   for(j in 1:n.ranker){
-    Z.mat[,j] = GibbsUpLatentGivenRankInd(pair.comp.ten[,,j], Z.mat[,j], mu[(j-1)+(1:n.item)], weight = weight.vec[j])
+    Z.mat[,j] = GibbsUpLatentGivenRankInd(pair.comp.ten[,,j], Z.mat[,j], mu[n.item*(j-1)+(1:n.item)], weight = weight.vec[j])
   }
   return(Z.mat)
 }
@@ -163,8 +199,8 @@ GibbsUpLatentGivenRankindividualnp <- function(pair.comp.ten, Z.mat,
                                              n.item = ncol(pair.comp.ten[,,1])){
   for(j in 1:n.ranker){
     Z.mat[,j] = GibbsUpLatentGivenRankIndnp(pair.comp.ten[,,j], Z.mat[,j],
-                                          mu[(j-1)+1:n.item], #weight = weight.vec[(j-1)+1:n.item]
-                                          sigvec = sigvec[(j-1)+1:n.item])
+                                          mu[n.item*(j-1)+1:n.item], #weight = weight.vec[n.item*(j-1)+1:n.item]
+                                          sigvec = sigvec[n.item*(j-1)+1:n.item])
   }
   return(Z.mat)
 }

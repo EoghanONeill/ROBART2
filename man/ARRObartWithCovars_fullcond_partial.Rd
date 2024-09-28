@@ -46,7 +46,8 @@ ARRObartWithCovars_fullcond_partial(
   sparse = TRUE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  topkinit = FALSE
 )
 }
 \arguments{

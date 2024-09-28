@@ -3775,7 +3775,37 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
     # print(colnames(Xmat.test))
 
     # print("begin dbarts")
-
+    #
+    # print("class(Xmat.train) = ")
+    # print(class(Xmat.train))
+    #
+    # print("ncol(Xmat.train) = ")
+    # print(ncol(Xmat.train))
+    #
+    # print("nrow(Xmat.train) = ")
+    # print(nrow(Xmat.train))
+    #
+    # print("colnames(Xmat.train) = ")
+    # print(colnames(Xmat.train))
+    #
+    # print("names(Xmat.train) = ")
+    # print(names(Xmat.train))
+    #
+    #
+    # print("class(Xmat.test) = ")
+    # print(class(Xmat.test))
+    #
+    # print("ncol(Xmat.test) = ")
+    # print(ncol(Xmat.test))
+    #
+    # print("nrow(Xmat.test) = ")
+    # print(nrow(Xmat.test))
+    #
+    # print("colnames(Xmat.test) = ")
+    # print(colnames(Xmat.test))
+    #
+    # print("names(Xmat.test) = ")
+    # print(names(Xmat.test))
 
     if(nrow(X.test )==0){
       sampler <- dbarts(y ~ .,
@@ -52640,7 +52670,7 @@ RObart <- function(pair.comp.ten,
                    alpha_b_y = 1,
                    alpha_split_prior = TRUE,
                    n.burnin = floor(dim(pair.comp.ten)[1]/2),
-                   topkinit = TRUE){
+                   topkinit = FALSE){
   ## store MCMC draws
 
   # print("begin function")
@@ -52732,8 +52762,6 @@ RObart <- function(pair.comp.ten,
           rnorm(n = 1, mean = 0, sd = 0.01)
 
       }else{
-
-
         Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
       }
       # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
@@ -54966,13 +54994,13 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                 # if(temprank_i==1){
                 #   templower <- -Inf
                 # }else{
-                #   templower <- max(tempz[tempranks < temprank_i])
+                #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                 # }
                 #
                 # if(temprank_i==n.item){
                 #   tempupper <- Inf
                 # }else{
-                #   tempupper <- min(tempz[tempranks > temprank_i])
+                #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                 # }
 
 
@@ -55059,13 +55087,13 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                   # if(temprank_i==1){
                   #   templower <- -Inf
                   # }else{
-                  #   templower <- max(tempz[tempranks < temprank_i])
+                  #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   # }
                   #
                   # if(temprank_i==n.item){
                   #   tempupper <- Inf
                   # }else{
-                  #   tempupper <- min(tempz[tempranks > temprank_i])
+                  #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   # }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -55145,13 +55173,13 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                   # if(temprank_i==1){
                   #   templower <- -Inf
                   # }else{
-                  #   templower <- max(tempz[tempranks < temprank_i])
+                  #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   # }
                   #
                   # if(temprank_i==n.item){
                   #   tempupper <- Inf
                   # }else{
-                  #   tempupper <- min(tempz[tempranks > temprank_i])
+                  #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   # }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -56237,13 +56265,13 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                 if(temprank_i==1){
                   templower <- -Inf
                 }else{
-                  templower <- max(tempz[tempranks < temprank_i])
+                  templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                 }
 
                 if(temprank_i==n.item){
                   tempupper <- Inf
                 }else{
-                  tempupper <- min(tempz[tempranks > temprank_i])
+                  tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                 }
                 # # calculate mean
                 # # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
@@ -56311,13 +56339,13 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                   if(temprank_i==1){
                     templower <- -Inf
                   }else{
-                    templower <- max(tempz[tempranks < temprank_i])
+                    templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   }
 
                   if(temprank_i==n.item){
                     tempupper <- Inf
                   }else{
-                    tempupper <- min(tempz[tempranks > temprank_i])
+                    tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -56381,13 +56409,13 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                   if(temprank_i==1){
                     templower <- -Inf
                   }else{
-                    templower <- max(tempz[tempranks < temprank_i])
+                    templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   }
 
                   if(temprank_i==n.item){
                     tempupper <- Inf
                   }else{
-                    tempupper <- min(tempz[tempranks > temprank_i])
+                    tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -57469,13 +57497,13 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                 if(temprank_i==1){
                   templower <- -Inf
                 }else{
-                  templower <- max(tempz[tempranks < temprank_i])
+                  templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                 }
 
                 if(temprank_i==n.item){
                   tempupper <- Inf
                 }else{
-                  tempupper <- min(tempz[tempranks > temprank_i])
+                  tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                 }
                 # # calculate mean
                 # # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
@@ -57543,13 +57571,13 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                   if(temprank_i==1){
                     templower <- -Inf
                   }else{
-                    templower <- max(tempz[tempranks < temprank_i])
+                    templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   }
 
                   if(temprank_i==n.item){
                     tempupper <- Inf
                   }else{
-                    tempupper <- min(tempz[tempranks > temprank_i])
+                    tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -57613,13 +57641,13 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                   if(temprank_i==1){
                     templower <- -Inf
                   }else{
-                    templower <- max(tempz[tempranks < temprank_i])
+                    templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
                   }
 
                   if(temprank_i==n.item){
                     tempupper <- Inf
                   }else{
-                    tempupper <- min(tempz[tempranks > temprank_i])
+                    tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
                   }
 
                   temp_z_i <- rtruncnorm(n = 1,
@@ -59716,13 +59744,13 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
             # if(temprank_i==1){
             #   templower <- -Inf
             # }else{
-            #   templower <- max(tempz[tempranks < temprank_i])
+            #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
             # }
             #
             # if(temprank_i==n.item){
             #   tempupper <- Inf
             # }else{
-            #   tempupper <- min(tempz[tempranks > temprank_i])
+            #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
             # }
 
 
@@ -59816,13 +59844,13 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
               # if(temprank_i==1){
               #   templower <- -Inf
               # }else{
-              #   templower <- max(tempz[tempranks < temprank_i])
+              #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               # }
               #
               # if(temprank_i==n.item){
               #   tempupper <- Inf
               # }else{
-              #   tempupper <- min(tempz[tempranks > temprank_i])
+              #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               # }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -59905,13 +59933,13 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
               # if(temprank_i==1){
               #   templower <- -Inf
               # }else{
-              #   templower <- max(tempz[tempranks < temprank_i])
+              #   templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               # }
               #
               # if(temprank_i==n.item){
               #   tempupper <- Inf
               # }else{
-              #   tempupper <- min(tempz[tempranks > temprank_i])
+              #   tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               # }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -61035,13 +61063,13 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
             if(temprank_i==1){
               templower <- -Inf
             }else{
-              templower <- max(tempz[tempranks < temprank_i])
+              templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
             }
 
             if(temprank_i==n.item){
               tempupper <- Inf
             }else{
-              tempupper <- min(tempz[tempranks > temprank_i])
+              tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
             }
             # # calculate mean
             # # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
@@ -61109,13 +61137,13 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
               if(temprank_i==1){
                 templower <- -Inf
               }else{
-                templower <- max(tempz[tempranks < temprank_i])
+                templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               }
 
               if(temprank_i==n.item){
                 tempupper <- Inf
               }else{
-                tempupper <- min(tempz[tempranks > temprank_i])
+                tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -61179,13 +61207,13 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
               if(temprank_i==1){
                 templower <- -Inf
               }else{
-                templower <- max(tempz[tempranks < temprank_i])
+                templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               }
 
               if(temprank_i==n.item){
                 tempupper <- Inf
               }else{
-                tempupper <- min(tempz[tempranks > temprank_i])
+                tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -62301,13 +62329,13 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
             if(temprank_i==1){
               templower <- -Inf
             }else{
-              templower <- max(tempz[tempranks < temprank_i])
+              templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
             }
 
             if(temprank_i==n.item){
               tempupper <- Inf
             }else{
-              tempupper <- min(tempz[tempranks > temprank_i])
+              tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
             }
             # # calculate mean
             # # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
@@ -62375,13 +62403,13 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
               if(temprank_i==1){
                 templower <- -Inf
               }else{
-                templower <- max(tempz[tempranks < temprank_i])
+                templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               }
 
               if(temprank_i==n.item){
                 tempupper <- Inf
               }else{
-                tempupper <- min(tempz[tempranks > temprank_i])
+                tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -62445,13 +62473,13 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
               if(temprank_i==1){
                 templower <- -Inf
               }else{
-                templower <- max(tempz[tempranks < temprank_i])
+                templower <- suppressWarnings( max(tempz[tempranks < temprank_i]))
               }
 
               if(temprank_i==n.item){
                 tempupper <- Inf
               }else{
-                tempupper <- min(tempz[tempranks > temprank_i])
+                tempupper <- suppressWarnings( min(tempz[tempranks > temprank_i]))
               }
 
               temp_z_i <- rtruncnorm(n = 1,
@@ -63976,7 +64004,8 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
                                  updateState = FALSE,
                                  num_lags = 1,
                                  diff_num_test_rankers = 0,
-                                 keep_zmat = FALSE, topkinit = TRUE){
+                                 keep_zmat = FALSE,
+                                 topkinit = FALSE){
   ## store MCMC draws
 
   # print("begin function")
@@ -64058,7 +64087,6 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
 
 
 
-
     ## initial values for Z
     Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
     for(j in 1:n.ranker){
@@ -64074,6 +64102,20 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
 
       }else{
         Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+        # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+        # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+        #
+        # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+        # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+        #
+        # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+        # # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(1 : n.item) - (1+n.item)/2)/sd(c(n.item : 1))
+        #
+        # print("j=")
+        # print(j)
+        # print("Z.mat[,j] = ")
+        # print(Z.mat[,j])
       }
       # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
     }
@@ -64167,6 +64209,8 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
       #so just take one mu value from each of these
       #this keeps the dimension of mu equal to n.item
       #so a new Gibbs sampler update does not have to be written for Z
+      # print("Z.mat = ")
+      # print(Z.mat)
       Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
                                            weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
 
@@ -64174,8 +64218,24 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
 
     }else{
       if(nrow(X.train)==n.item*n.ranker){
+        # print("Z.mat = ")
+        # print(Z.mat)
+        #
+        # print("n.ranker = ")
+        # print(n.ranker)
+        #
+        # print("n.item = ")
+        # print(n.item)
+        #
+        #
+        # print("iter = ")
+        # print(iter)
+
         Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu, weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
                                                   n.item = n.item )
+        if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+
+
       }else{
         #stop("nrow(X.train) not equal to n.item or n.ranker")
       }

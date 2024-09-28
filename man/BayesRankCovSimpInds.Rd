@@ -33,7 +33,8 @@ BayesRankCovSimpInds(
   updateState = FALSE,
   num_lags = 1,
   diff_num_test_rankers = 0,
-  keep_zmat = FALSE
+  keep_zmat = FALSE,
+  topkinit = FALSE
 )
 }
 \arguments{
