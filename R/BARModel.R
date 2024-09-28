@@ -51415,6 +51415,658 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 
 
 
+
+
+
+
+#' BART model for Bayesian Analysis of Rank-Order data with entities' covariates. Separate tree for each item.
+#'
+#' Implement the Bayesian model for rank-order data with ranked entities' covariates information.
+#' @import truncnorm
+#' @import mvtnorm
+#' @import dbarts
+#' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{M} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
+#' @param X.mat An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
+#' @param iter.max Number of iterations for Gibbs sampler.
+#' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @param initial.list List of initial values for the Gibbs sample. If not null, must contain elements named Z.mat and mu.
+#' @param n.trees (dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.
+#' @param n.chains (dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
+#' @param n.threads  (dbarts option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
+#' @param printEvery (dbarts option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
+#' @param printCutoffs (dbarts option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
+#' @param rngKind (dbarts option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
+#' @param rngNormalKind (dbarts option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
+#' @param rngSeed (dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
+#' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
+#' @param diff_num_test_rankers Equal to 1 if there is a different number of rankers in the test data than in the training data. (assumes no structure to input data)
+#' @param keep_zmat Boolean. If equal to TRUE output the draws of Zmat for training data and test data
+#' @param tree_power Tree prior parameter for outcome model.
+#' @param tree_base Tree prior parameter for outcome model.
+#' @param sparse If equal to TRUE, use Linero Dirichlet prior on splitting probabilities
+#' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
+#' @param alpha_split_prior If TRUE, set hyperprior for Linero alpha parameter
+#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.
+#' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
+#' @export
+RObart_ItemTrees <- function(pair.comp.ten,
+                   X.train = matrix(NA, nrow =dim(pair.comp.ten)[1], ncol = 0),
+                   X.test = matrix(NA, nrow =0, ncol = 0),
+                   # tau2.alpha = 5^2,
+                   # nu.alpha = 3,
+                   # tau2.beta = 5^2,
+                   # nu.beta = 3,
+                   n.item = dim(pair.comp.ten)[1],
+                   n.ranker = dim(pair.comp.ten)[3],
+                   p.cov = ncol(X.train),
+                   iter.max = 5000,
+                   # para.expan = TRUE,
+                   print.opt = 100,
+                   initial.list = NULL,
+                   n.trees = 50L,
+                   n.burn = 0L,
+                   n.samples = 1L,
+                   n.thin = 1L,
+                   n.chains = 1,
+                   n.threads = 1L,#guessNumCores(),
+                   printEvery = 100L,
+                   printCutoffs = 0L,
+                   rngKind = "default",
+                   rngNormalKind = "default",
+                   rngSeed = NA_integer_,
+                   updateState = TRUE, # FALSE,
+                   num_lags = 1,
+                   diff_num_test_rankers = 0,
+                   keep_zmat = FALSE,
+                   tree_power = 2,
+                   tree_base = 0.95,
+                   sparse = FALSE,
+                   alpha_a_y = 0.5,
+                   alpha_b_y = 1,
+                   alpha_split_prior = TRUE,
+                   n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                   topkinit = FALSE){
+  ## store MCMC draws
+
+  # print("begin function")
+
+  if(n.ranker == 1){
+    stop("n.ranker == 1. This methods is for data with many rankers.")
+  }
+  if(n.ranker < 20){
+    warning("n.ranker < 20. This methods is for data with many rankers.")
+  }
+
+  length_mu <- 1
+
+  if(nrow(X.train)==n.item){
+    stop("nrow(X.train)==n.item. Require separate row for each item-ranker combination.")
+    length_mu <- n.item
+  }else{
+    if(nrow(X.train)==n.item*n.ranker){
+      length_mu <- n.item*n.ranker
+    }else{
+      stop("nrow(X.train) not equal to n.item or n.ranker")
+    }
+
+  }
+
+  # later write code in a way that allows for just ranker-specific rows
+  # i.e. nrow(X.train) == n.ranker
+
+
+  length_mu_test <- 1
+  num_test_rankers <- 1
+
+  if(nrow(X.test) >0 ){
+    if(diff_num_test_rankers==1){
+      length_mu_test <- nrow(X.test)
+      num_test_rankers <- length_mu_test/n.item
+      if(num_test_rankers%%1 !=0){
+        print("number of test data observations must be an integer multiple of number of items for number of test data rankers to be an integer.")
+      }
+    }else{
+      if(nrow(X.train)==n.item){
+        length_mu_test <- n.item*n.ranker
+
+      }else{
+        length_mu_test <- nrow(X.test)
+        num_test_rankers <- length_mu_test/n.item
+        if(num_test_rankers%%1 !=0){
+          print("number of test data observations must be an integer multiple of number of items for number of test data rankers to be an integer.")
+        }
+      }
+    }
+  }
+
+
+
+  draw = list(
+    # Z.mat = array(NA, dim = c(n.item, n.ranker, iter.max)),
+    #alpha = array(NA, dim = c(n.item, iter.max)),
+    #beta = array(NA, dim = c(p.cov, iter.max)),
+    #if the x values do not vary over rankers, then there will only be n.item unique x values
+    mu = array(NA, dim = c(length_mu, iter.max))#,
+    #
+    #
+    #can have mu of dimension n.item*n.ranker to operationalize rnanker-specific mu values, then need to edit gibbs update of Z
+    #mu = array(NA, dim = c(n.item*n.ranker, iter.max))#,
+    # sigma2.alpha = rep(NA, iter.max),
+    # sigma2.beta = rep(NA, iter.max)
+  )
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat = array(NA, dim = c(n.item, n.ranker, iter.max))
+  }
+
+  if(nrow(X.test) >0 ){
+
+    # if(keep_zmat==TRUE){
+    #   draw$Z.mat.test = array(NA, dim = c(n.item, num_test_rankers, iter.max))
+    # }
+    draw$mu_test <- array(NA, dim = c(length_mu_test, iter.max))
+
+  }
+
+
+
+
+
+
+  if(is.null(initial.list)){
+    ## initial values for Z
+    Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
+    for(j in 1:n.ranker){
+      if(topkinit == TRUE){
+
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+      }
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+    }
+
+    ## initial values
+    # alpha = rep(0, n.item)
+    # beta = rep(0, p.cov)
+
+    # print("create data matrices for dbarts")
+
+    #must repeat x matrix if only n.item by the number of covaraites
+    #otherwise, the matrix has ranking specific covariates
+    if(nrow(X.train)==n.item){
+      Xmat.train <- data.frame(y = as.vector(Z.mat), x = matrix( rep( t( X.train ) , n.ranker ) , ncol =  ncol(X.train) , byrow = TRUE ))
+
+      #colnames(Xmat.train) <- c("y", "x","z","w")
+
+      if(nrow(X.test) >0 ){
+        # print("nrow(X.test) = ")
+        # print(nrow(X.test))
+
+        Xmat.test <- data.frame(x = matrix( rep( t( X.test ) , n.ranker ) , ncol =  ncol(X.test) , byrow = TRUE ))
+        #colnames(Xmat.test) <- c("x","z","w")
+      }
+    }else{
+      if(nrow(X.train)==n.item*n.ranker){
+        Xmat.train <- data.frame(y = as.vector(Z.mat), X.train)
+        if(nrow(X.test)>0 ){
+          Xmat.test  <- data.frame(X.test)
+        }
+      }else{
+        stop("nrow(X.train) not equal to n.item or n.item*n.ranker")
+      }
+
+    }
+
+    p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
+
+
+    s_y_list <- list()
+    alpha_s_y_list <- list()
+    if(sparse){
+      s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
+      rho_y <- p_y # For DART
+
+      if(alpha_split_prior){
+        alpha_s_y <- p_y
+      }else{
+        alpha_s_y <- 1
+      }
+      alpha_scale_y <- p_y
+
+
+      var_count_y <- rep(0, p_y)
+
+      draw$alpha_s_y_store <- matrix(NA, nrow = iter.max, ncol = n.item)
+      draw$var_count_y_store <- array(0, dim - c( p_y,  iter.max, n.item))
+      draw$s_prob_y_store <- array(0, dim - c( p_y,  iter.max, n.item))
+    }
+
+
+    control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
+                             keepTrees = TRUE,
+                             n.trees = n.trees,
+                             n.burn = n.burn,
+                             n.samples = n.samples,
+                             n.thin = n.thin,
+                             n.chains = n.chains,
+                             n.threads = n.threads,
+                             printEvery = printEvery,
+                             printCutoffs = printCutoffs,
+                             rngKind = rngKind,
+                             rngNormalKind = rngNormalKind,
+                             rngSeed = rngSeed)
+
+
+    # print(colnames(Xmat.train))
+
+    # print("begin dbarts")
+    samplerlist <- list()
+    varcount_list <- list()
+    mutemp <- rep(NA, nrow(Xmat.train))
+    samplestemp_list <- list()
+    for(item in 1:n.item){
+      if(nrow(X.test )==0){
+        sampler <- dbarts(y ~ .,
+                          data = Xmat.train[(0:(n.ranker-1))*n.item + item, ],
+                          #test = Xmat.test,
+                          control = control,
+                          tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
+                          resid.prior = fixed(1),
+                          sigma=1 #check if this is the correct approach for setting the variance to 1
+        )
+        samplerlist[[item]] <- sampler
+      }else{
+        sampler <- dbarts(y ~ .,
+                          data = Xmat.train[(0:(n.ranker-1))*n.item + item, ],
+                          test = Xmat.test[(0:(num_test_rankers-1))*n.item + item, ],
+                          control = control,
+                          tree.prior = dbarts:::cgm(power = tree_power, base =  tree_base,  split.probs = rep(1 / p_y, p_y)),
+                          resid.prior = fixed(1), #this was suggested by the dbarts package author. I assume this is sufficient
+                          sigma=1 #
+        )
+        samplerlist[[item]] <- sampler
+
+      }
+
+
+      # print("error after dbarts")
+
+      #set the response.
+      #Check that 0 is a reasonable initial value
+      #perhaps makes more sense to use initial values of Z
+      samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+      # sampler$setSigma(sigma = 1)
+
+      #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+      if(sparse){
+        s_y_list[[item]] <- s_y
+        alpha_s_y_list[[item]] <- alpha_s_y
+        tempmodel <- samplerlist[[item]]$model
+        tempmodel@tree.prior@splitProbabilities <- s_y
+        samplerlist[[item]]$setModel(newModel = tempmodel)
+      }
+
+      #mu = as.vector( alpha + X.mat %*% beta )
+      samplerlist[[item]]$sampleTreesFromPrior()
+      samplestemp <- samplerlist[[item]]$run()
+      samplestemp_list[[item]] <- samplestemp
+
+      mutempitem <- samplestemp$train[,1]
+      mutemp[(0:(n.ranker-1))*n.item + item] <- mutempitem
+
+      #suppose there are a number of samples
+
+      # print("sigma = ")
+      # print(samplestemp$sigma)
+
+      # mupreds <- samplerlist[[item]]$predict(Xmat.train)
+
+      if(sparse){
+        tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
+        tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y <- rep(0, p_y)
+        var_count_y[tempcounts$x] <- tempcounts$N
+        varcount_list[[item]] <- var_count_y
+      }
+
+
+
+    }
+
+
+
+
+
+    if(nrow(X.train)==n.item){
+      #each n.ranker values of u should be equal,
+      #so just take one mu value from each of these
+      #this keeps the dimension of mu equal to n.item
+      #so a new Gibbs sampler update does not have to be written for Z
+
+      # if(mutemp[1]!= mutemp[n.item+1]){
+      if(mutemp[n.item+1]!= mutemp[n.item+n.item+1]){
+        print("initiating mu")
+        print("Xmat.train = ")
+        print(Xmat.train)
+        print("Z.mat = ")
+        print(Z.mat)
+
+        print("samplestemp$sigma = ")
+        print(samplestemp$sigma)
+        print("samplestemp$varcount = ")
+        print(samplestemp$varcount)
+
+        print("samplestemp$train[,1] = ")
+        print(samplestemp$train[,1])
+
+        print("n.item = ")
+        print(n.item)
+        print("mutemp = ")
+        print(mutemp)
+
+        # print("mupreds= ")
+        # print(mupreds)
+
+        stop("mutemp[1]!= mutemp[n.item+1]")
+      }
+
+      #mu = mutemp[(1:n.item)]
+      mu = mutemp[n.item+(1:n.item)]
+
+      #mu = mutemp[(1:n.item)*n.ranker]
+
+    }else{
+      if(nrow(X.train)==n.item*n.ranker){
+        mu <- mutemp
+      }else{
+        stop("nrow(X.train) not equal to n.item or n.ranker")
+      }
+
+    }
+
+
+    ## initial values for sigma2.alpha and sigma2.beta
+    # sigma2.alpha = tau2.alpha
+    # sigma2.beta = tau2.beta
+
+  }else{
+    stop("code for non-zero initial list not yet written")
+    Z.mat <- initial.list$Z.mat
+    # alpha = initial.list$alpha
+    # beta = initial.list$beta
+    mu <- initial.list$mu #as.vector( alpha + X.mat %*% beta )
+    # sigma2.alpha = initial.list$sigma2.alpha
+    # sigma2.beta = initial.list$sigma2.beta
+  }
+
+
+
+  ## store initial value
+  #
+  #   print("Z.mat = ")
+  #   print(Z.mat)
+  #
+  #
+  #   print("dim(draw$Z.mat) = ")
+  #
+  #   print(dim(draw$Z.mat))
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat[,,1] <- Z.mat
+  }
+
+  # draw$alpha[,1] = alpha
+  # draw$beta[,1] = beta
+  draw$mu[,1] <- mu
+  # draw$sigma2.alpha[1] = sigma2.alpha
+  # draw$sigma2.beta[1] = sigma2.beta
+
+
+  if( nrow(X.test) >0 ){
+    if(is.null(initial.list)){
+      # print("samplestemp$test[,1] = ")
+      # print(samplestemp$test[,1])
+
+      # draw$mu_test[,1] <- samplestemp$test[,1]
+      for(item in 1:n.item){
+        draw$mu_test[(0:(num_test_rankers-1))*n.item + item,1] <- samplestemp_list[[item]]$test[,1]
+      }
+
+    }else{
+      draw$mu_test[,1] <- initial.list$mu_test
+    }
+
+  }
+
+
+
+  ## Gibbs iteration
+  for(iter in 2:iter.max){
+
+
+    if(nrow(X.train)==n.item){
+      #each n.ranker values of u should be equal,
+      #so just take one mu value from each of these
+      #this keeps the dimension of mu equal to n.item
+      #so a new Gibbs sampler update does not have to be written for Z
+      Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
+                                           weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
+
+      if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+
+    }else{
+      if(nrow(X.train)==n.item*n.ranker){
+
+        if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+        if(any(is.na(mu))){stop("NA in mu")}
+
+
+        Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu, weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
+                                                  n.item = n.item )
+      }else{
+        #stop("nrow(X.train) not equal to n.item or n.ranker")
+      }
+    }
+
+
+    # update Z.mat given (alpha, beta) or equivalently mu
+
+    # update (alpha, beta) or equivalently mu
+    # omitting the theta step for now,
+    # although this would ideally be edited for BART and included to speed up convergence
+
+
+
+    #
+    # mean.para.update = GibbsUpMuGivenLatentGroup(Z.mat = Z.mat, X.mat = X.mat, weight.vec = rep(1, n.ranker),
+    #                                              sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+    #                                              n.ranker = n.ranker, n.item = n.item,
+    #                                              p.cov = p.cov, para.expan = para.expan)
+    #
+    #     ### for check only
+    #     Z.mat = Z.mat/mean.para.update$theta
+    #
+    #     alpha = mean.para.update$alpha
+    #     beta = mean.para.update$beta
+
+    # mu = as.vector( alpha + X.mat %*% beta )
+    #
+    # # update hyper para sigma2.alpha and sigma2.beta
+    # sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+    # if(p.cov > 0){
+    #   sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+    # }
+
+
+    for(item in 1:n.item){
+
+      # print("error after dbarts")
+
+      #set the response.
+      #Check that 0 is a reasonable initial value
+      #perhaps makes more sense to use initial values of Z
+      samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+      # sampler$setSigma(sigma = 1)
+
+      #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+      if(sparse){
+        tempmodel <- samplerlist[[item]]$model
+        tempmodel@tree.prior@splitProbabilities <- s_y
+        samplerlist[[item]]$setModel(newModel = tempmodel)
+      }
+
+      #mu = as.vector( alpha + X.mat %*% beta )
+      samplestemp <- samplerlist[[item]]$run()
+      samplestemp_list[[item]] <- samplestemp
+      mutempitem <- samplestemp$train[,1]
+      mutemp[(0:(n.ranker-1))*n.item + item] <- mutempitem
+
+      #suppose there are a number of samples
+      # print("sigma = ")
+      # print(samplestemp$sigma)
+
+      # mupreds <- samplerlist[[item]]$predict(Xmat.train)
+
+      if(sparse){
+        tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
+        tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y[tempcounts$x] <- tempcounts$N
+        varcount_list[[item]] <- var_count_y
+      }
+
+      if (sparse & (iter > floor(n.burnin * 0.5))) {
+        # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+        # s_z <- s_update_z[[1]]
+
+        s_update_y <- update_s(var_count_y, p_y, alpha_s_y_list[[item]])
+        s_y <- s_update_y[[1]]
+        s_y_list[[item]] <- s_y
+        if(alpha_split_prior){
+          # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+          alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+          alpha_s_y_list[[item]] <- alpha_s_y
+        }
+      }
+
+    }
+
+    mu = mutemp
+    # #set the response.
+    # #Check that 0 is a reasonable initial value
+    # #perhaps makes more sense to use initial values of Z
+    # sampler$setResponse(y = as.vector(Z.mat))
+    # # sampler$setSigma(sigma = 1)
+    # #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+    #
+    #
+    # if(sparse){
+    #   tempmodel <- sampler$model
+    #   tempmodel@tree.prior@splitProbabilities <- s_y
+    #   sampler$setModel(newModel = tempmodel)
+    # }
+    #
+    # #mu = as.vector( alpha + X.mat %*% beta )
+    # samplestemp <- sampler$run()
+    #
+    # mutemp <- samplestemp$train[,1]
+    # #suppose there are a number of samples
+    #
+    # # mutemp <- sampler$predict(Xmat.train)
+    # # print("sigma = ")
+    # # print(samplestemp$sigma)
+    #
+    # if(sparse){
+    #   tempcounts <- fcount(sampler$getTrees()$var)
+    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+    #   var_count_y[tempcounts$x] <- tempcounts$N
+    # }
+    #
+    # if(nrow(X.train)==n.item){
+    #   #each n.ranker values of u should be equal,
+    #   #so just take one mu value from each of these
+    #   #this keeps the dimension of mu equal to n.item
+    #   #so a new Gibbs sampler update does not have to be written for Z
+    #
+    #   #mu = mutemp[(1:n.item)]
+    #   mu = mutemp[n.item+(1:n.item)]
+    #
+    #
+    #
+    #
+    #   # if(mutemp[1]!= mutemp[n.item+1]){
+    #   if(mutemp[n.item+1]!= mutemp[n.item+n.item+1]){
+    #     print("iteration number")
+    #     print(iter)
+    #     print("n.item = ")
+    #     print(n.item)
+    #     print("mutemp = ")
+    #     print(mutemp)
+    #     stop("mutemp[1]!= mutemp[n.item+1]")
+    #   }
+    #
+    #
+    #   #mu = mutemp[(1:n.item)*n.ranker]
+    # }else{
+    #   if(nrow(X.train)==n.item*n.ranker){
+    #     mu = mutemp
+    #   }else{
+    #     stop("nrow(X.train) not equal to n.item or n.ranker")
+    #   }
+    #
+    # }
+
+
+
+    # store value at this iteration
+    if(keep_zmat==TRUE){
+      draw$Z.mat[,,iter] = Z.mat
+    }
+
+    # draw$alpha[,iter] = alpha
+    # draw$beta[,iter] = beta
+    draw$mu[,iter] = mu
+    # draw$sigma2.alpha[iter] = sigma2.alpha
+    # draw$sigma2.beta[iter] = sigma2.beta
+
+    if( nrow(X.test) >0 ){
+      # draw$mu_test[,iter] <- samplestemp_list[[item]]$test[,1]
+      for(item in 1:n.item){
+        draw$mu_test[(0:(num_test_rankers-1))*n.item + item,1] <- samplestemp_list[[item]]$test[,1]
+      }
+    }
+
+    if(sparse){
+      for(item in 1:n.item)
+      draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
+      # draw$alpha_s_z_store[iter] <- alpha_s_z
+      draw$var_count_y_store[iter, , item] <- varcount_list[[item]]
+      # draw$var_count_z_store[iter,] <- var_count_z
+      draw$s_prob_y_store[iter, , item] <- s_y_list[[item]]
+      # draw$s_prob_z_store[iter,] <- s_z
+    }
+
+    # print iteration number
+    if(iter %% print.opt == 0){
+      print(paste("Gibbs Iteration", iter))
+      # print(c(sigma2.alpha, sigma2.beta))
+    }
+
+  }
+  return(draw)
+}
+
+
+
+
 #' @title Nonparametric BART model for Bayesian Analysis of Rank-Order data with entities' Covariates
 #'
 #' @description Bayesian Additive Regression Tree Model for rank-order data with mixture of Gaussian distributions for the latent error term.
