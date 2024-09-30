@@ -42,7 +42,7 @@ ARRObartWithCovars_fullcond_partial(
   itemcovars = FALSE,
   tree_power = 2,
   tree_base = 0.95,
-  n.burnin = floor(dim(pair.comp.ten)[1]/2),
+  n.burnin = 0,
   sparse = TRUE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,

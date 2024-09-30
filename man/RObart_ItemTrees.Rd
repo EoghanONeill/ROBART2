@@ -35,8 +35,21 @@ RObart_ItemTrees(
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE,
-  n.burnin = floor(dim(pair.comp.ten)[1]/2),
-  topkinit = FALSE
+  n.burnin = 0,
+  topkinit = FALSE,
+  np_errors = FALSE,
+  alpha_prior = "vh",
+  c1 = 2,
+  c2 = 2,
+  alpha_gridsize = 100L,
+  ranker_components = TRUE,
+  lambda0 = NA,
+  sigest = NA,
+  nu0 = 10,
+  sigquant = 0.95,
+  item_intercepts = FALSE,
+  tau2.alpha = 5^2,
+  nu.alpha = 3
 )
 }
 \arguments{

@@ -709,7 +709,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
                                       num_z_iters = 10,
                                       tree_power = 2,
                                       tree_base = 0.95,
-                                      n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                      n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
                                       sparse = TRUE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
@@ -3204,6 +3204,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 #' @import mvtnorm
 #' @import dbarts
 #' @import LinConGauss
+#' @import accelerometry
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{MT} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers and \eqn{T} time periods, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param X.train An \eqn{N} by \eqn{L} training covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
 #' @param X.test An \eqn{N} by \eqn{L} test covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
@@ -3288,7 +3289,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
                                         itemcovars = FALSE,
                                         tree_power = 2,
                                         tree_base = 0.95,
-                                        n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                        n.burnin = 0, #floor(dim(pair.comp.ten)[1]/2),
                                         sparse = TRUE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
@@ -29045,7 +29046,7 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
                                       num_z_iters = 10,
                                       tree_power = 2,
                                       tree_base = 0.95,
-                                      n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                      n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
                                       sparse = TRUE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
@@ -35144,7 +35145,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
                                         itemcovars = FALSE,
                                         tree_power = 2,
                                         tree_base = 0.95,
-                                        n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                                        n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
                                         sparse = TRUE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
@@ -51485,8 +51486,21 @@ RObart_ItemTrees <- function(pair.comp.ten,
                    alpha_a_y = 0.5,
                    alpha_b_y = 1,
                    alpha_split_prior = TRUE,
-                   n.burnin = floor(dim(pair.comp.ten)[1]/2),
-                   topkinit = FALSE){
+                   n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
+                   topkinit = FALSE,
+                   np_errors = FALSE,
+                   alpha_prior = "vh",
+                   c1 = 2,
+                   c2 = 2,
+                   alpha_gridsize = 100L,
+                   ranker_components = TRUE,
+                   lambda0 = NA,
+                   sigest = NA,
+                   nu0=10,
+                   sigquant = 0.95,
+                   item_intercepts = FALSE,
+                   tau2.alpha = 5^2,
+                   nu.alpha = 3){
   ## store MCMC draws
 
   # print("begin function")
@@ -51556,6 +51570,12 @@ RObart_ItemTrees <- function(pair.comp.ten,
     # sigma2.beta = rep(NA, iter.max)
   )
 
+  if(item_intercepts == TRUE){
+    draw$alphaintercepts = array(NA, dim = c(n.item, iter.max))
+    draw$mu_plus_alpha = array(NA, dim = c(length_mu, iter.max))
+  }
+
+
   if(keep_zmat==TRUE){
     draw$Z.mat = array(NA, dim = c(n.item, n.ranker, iter.max))
   }
@@ -51567,6 +51587,9 @@ RObart_ItemTrees <- function(pair.comp.ten,
     # }
     draw$mu_test <- array(NA, dim = c(length_mu_test, iter.max))
 
+    if(item_intercepts == TRUE){
+      draw$mu_plus_alpha_test <- array(NA, dim = c(length_mu_test, iter.max))
+    }
   }
 
 
@@ -51575,6 +51598,11 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
 
   if(is.null(initial.list)){
+
+    if(item_intercepts == TRUE){
+      alphaintercepts = rep(0, n.item)
+    }
+
     ## initial values for Z
     Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
     for(j in 1:n.ranker){
@@ -51626,6 +51654,65 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
     }
 
+
+    #### initialize NP components ####
+    if(np_errors == TRUE){
+      if((ranker_components == FALSE ) & (nrow(X.train) !=n.item) & (n.ranker >1)){
+        stop("Code does not currently support (ranker_components == FALSE ) & (nrow(X.train) !=n.item) & (n.ranker >1).")
+      }
+      num_obs_ztrain <- n.item*n.ranker#length(as.vector(Z.mat))#nrow(X.train)
+      num_obs_ztest <- n.item*num_test_rankers
+      # set hyperparameter values for error term
+      alpha <- rgamma(n = 1, shape = c1, rate = c2)
+      alpha <- c1/c2
+      mu0 <-  0
+      if(is.na(lambda0)) {
+        if(is.na(sigest)) {
+          # not clear how to set this since latent variable
+          sigest <- 1
+        }
+        qchi = qchisq(1.0-sigquant,nu0)
+        lambda0 = (sigest*sigest*qchi)/nu0 #lambda parameter for sigma prior
+      } else {
+        sigest=sqrt(lambda0)
+      }
+      k_s <- 10 # using default from fully nonparametric BART paper
+      #not obvous how to set this
+      #could set to maximum of linear model residuals
+      #not clear how to set this because only have latent variable
+      #emax <- max(y-mu0)
+      emax <- 3 #arbitrary (a reasonable maximum for a few hundred standard normal draws)
+      k0 <- ( ( k_s*sqrt(lambda0))/emax )^2
+      sigma_init <- sqrt(1/rgamma(n = 1,
+                                  shape =  nu0/2,
+                                  rate = nu0*lambda0/2))
+      mu_init <- 0 # rnorm(1, mean = mu0, sd = sigma_init/sqrt(k0))
+      if(ranker_components == FALSE ){
+        length_mu1 <- n.item
+      }else{
+        length_mu1 <- n.item*n.ranker
+      }
+      if(nrow(X.test) >0 ){
+        if(ranker_components == FALSE ){
+          length_mu1test <- n.item
+        }else{
+          length_mu1test <- n.item*num_test_rankers
+        }
+      }
+      sigma1_vec_train <- rep(sigma_init, length_mu1)
+      # sigma1_vec_test <- rep(sigma_init, length_mu_test)
+      mu1_vec_train <- rep(mu_init,length_mu1)
+      # mu1_vec_test <- rep(mu_init,length_mu_test)
+      varthetamat <- cbind(mu1_vec_train, sigma1_vec_train)
+      if(nrow(X.test) >0 ){
+        sigma1_vec_test <- rep(sigma_init, length_mu1test)
+        mu1_vec_test <- rep(mu_init,length_mu1test)
+        varthetamat_test <- cbind(mu1_vec_test, sigma1_vec_test)
+      }
+    }
+
+
+
     p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
 
 
@@ -51646,11 +51733,12 @@ RObart_ItemTrees <- function(pair.comp.ten,
       var_count_y <- rep(0, p_y)
 
       draw$alpha_s_y_store <- matrix(NA, nrow = iter.max, ncol = n.item)
-      draw$var_count_y_store <- array(0, dim - c( p_y,  iter.max, n.item))
-      draw$s_prob_y_store <- array(0, dim - c( p_y,  iter.max, n.item))
+      draw$var_count_y_store <- array(0, dim =  c( p_y,  iter.max, n.item))
+      draw$s_prob_y_store <- array(0, dim = c( p_y,  iter.max, n.item))
     }
 
 
+    #### initialize trees ####
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
                              n.trees = n.trees,
@@ -51713,6 +51801,20 @@ RObart_ItemTrees <- function(pair.comp.ten,
         tempmodel <- samplerlist[[item]]$model
         tempmodel@tree.prior@splitProbabilities <- s_y
         samplerlist[[item]]$setModel(newModel = tempmodel)
+      }
+
+      if(np_errors == TRUE){
+        if(ranker_components == FALSE ){
+          tempy <- as.vector(Z.mat[item, ]) - rep(mu1_vec_train[ item] ,n.ranker)
+        }else{
+          if(length(as.vector(Z.mat[item, ])) != length(mu1_vec_train[(0:(n.ranker-1))*n.item + item] )){
+            stop("length(as.vector(Z.mat)) != length(mu1_vec_train)")
+          }
+          tempy <- as.vector(Z.mat[item, ]) - mu1_vec_train[(0:(n.ranker-1))*n.item + item]
+        }
+        samplerlist[[item]]$setResponse(y = tempy)
+        weightstemp_y  <- 1/(sigma1_vec_train[(0:(n.ranker-1))*n.item + item]^2)
+        sampler$setWeights(weights = weightstemp_y)
       }
 
       #mu = as.vector( alpha + X.mat %*% beta )
@@ -51795,8 +51897,11 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
 
     ## initial values for sigma2.alpha and sigma2.beta
-    # sigma2.alpha = tau2.alpha
-    # sigma2.beta = tau2.beta
+    if(item_intercepts){
+      sigma2.alpha = tau2.alpha
+      # sigma2.beta = tau2.beta
+    }
+
 
   }else{
     stop("code for non-zero initial list not yet written")
@@ -51804,8 +51909,10 @@ RObart_ItemTrees <- function(pair.comp.ten,
     # alpha = initial.list$alpha
     # beta = initial.list$beta
     mu <- initial.list$mu #as.vector( alpha + X.mat %*% beta )
-    # sigma2.alpha = initial.list$sigma2.alpha
-    # sigma2.beta = initial.list$sigma2.beta
+    if(item_intercepts){
+      sigma2.alpha = initial.list$sigma2.alpha
+      # sigma2.beta = initial.list$sigma2.beta
+    }
   }
 
 
@@ -51831,6 +51938,12 @@ RObart_ItemTrees <- function(pair.comp.ten,
   # draw$sigma2.beta[1] = sigma2.beta
 
 
+  if(item_intercepts == TRUE){
+    draw$alphaintercepts[,1] = alphaintercepts
+    alphafullvec <- rep(alphaintercepts,n.ranker)
+    draw$mu_plus_alpha[,1] <- mu + alphafullvec
+  }
+
   if( nrow(X.test) >0 ){
     if(is.null(initial.list)){
       # print("samplestemp$test[,1] = ")
@@ -51839,89 +51952,191 @@ RObart_ItemTrees <- function(pair.comp.ten,
       # draw$mu_test[,1] <- samplestemp$test[,1]
       for(item in 1:n.item){
         draw$mu_test[(0:(num_test_rankers-1))*n.item + item,1] <- samplestemp_list[[item]]$test[,1]
+        if(item_intercepts == TRUE){
+          draw$mu_plus_alpha_test[(0:(num_test_rankers-1))*n.item + item,1] <- samplestemp_list[[item]]$test[,1] + rep(alphaintercepts[item], num_test_rankers)
+        }
       }
-
     }else{
       draw$mu_test[,1] <- initial.list$mu_test
+      if(item_intercepts == TRUE){
+        draw$mu_plus_alpha_test[,1] <- initial.list$mu_test + rep(alphaintercepts,num_test_rankers)
+      }
+    }
+
+  }
+
+
+  if(np_errors == TRUE){
+    draw$alphamixing[1] <- alpha
+
+    temp_loop_len <- num_obs_ztrain
+
+    if(ranker_components==TRUE){
+      temp_loop_len <- num_obs_ztrain
+    }else{
+      temp_loop_len <- num_obs_ztrain/n.ranker
+
+    }
+
+
+    if( nrow(X.test) >0 ){
+      # must draw test parameter values
+      test_clusts <-  sample(0:temp_loop_len,
+                             size = num_obs_ztest,
+                             replace = TRUE,
+                             prob = c(alpha/(alpha+temp_loop_len),
+                                      rep(1/(alpha+temp_loop_len) ,
+                                          temp_loop_len) ))
+
+
+      if(sum(test_clusts >0)==0){
+        # skip
+      }else{
+        sigma1_vec_test[test_clusts > 0] <- sigma1_vec_train[test_clusts[test_clusts > 0]  ]
+        mu1_vec_test[test_clusts > 0] <- mu1_vec_train[test_clusts[test_clusts > 0]  ]
+      }
+
+      if(sum(test_clusts ==0)==0){
+        # skip
+      }else{
+        # draw from prior
+        numzeros <- sum(test_clusts ==0)
+
+        sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros, shape =  nu0/2, rate = nu0*lambda0/2) )
+
+        mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros, mean = mu0, sd = sigma1_vec_test[test_clusts ==0]/sqrt(k0))
+
+      }
     }
 
   }
 
 
 
-  ## Gibbs iteration
+  ## Gibbs sampler begin #####################
   for(iter in 2:iter.max){
 
 
-    if(nrow(X.train)==n.item){
-      #each n.ranker values of u should be equal,
-      #so just take one mu value from each of these
-      #this keeps the dimension of mu equal to n.item
-      #so a new Gibbs sampler update does not have to be written for Z
-      Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
-                                           weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
-
-      if(any(is.na(Z.mat))){stop("NA in Z.mat")}
-
+    ######### draw Z #################
+    if(np_errors == TRUE){
+      # not most memory efficient efficient code
+      if(item_intercepts == TRUE){
+        mutemp2 <-  mu + mu1_vec_train + alphafullvec
+      }else{
+        mutemp2 <- mu + mu1_vec_train
+      }
+      Z.mat <- GibbsUpLatentGivenRankindividualnp(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat,
+                                                  mu = mutemp2,
+                                                  sigvec = sigma1_vec_train,
+                                                  n.ranker = n.ranker,
+                                                  n.item = n.item )
     }else{
-      if(nrow(X.train)==n.item*n.ranker){
+      if(nrow(X.train)==n.item){
+        #each n.ranker values of u should be equal,
+        #so just take one mu value from each of these
+        #this keeps the dimension of mu equal to n.item
+        #so a new Gibbs sampler update does not have to be written for Z
+        if(item_intercepts == TRUE){
+          mutemp2 <- mu + alphaintercepts
+        }else{
+          mutemp2 <- mu
+        }
+
+        Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mutemp2,
+                                             weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
 
         if(any(is.na(Z.mat))){stop("NA in Z.mat")}
-        if(any(is.na(mu))){stop("NA in mu")}
 
-
-        Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu, weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
-                                                  n.item = n.item )
       }else{
-        #stop("nrow(X.train) not equal to n.item or n.ranker")
+        if(nrow(X.train)==n.item*n.ranker){
+
+          if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+          if(any(is.na(mu))){stop("NA in mu")}
+          # not most memory efficient efficient code
+          if(item_intercepts == TRUE){
+            mutemp2 <- mu + alphafullvec
+          }else{
+            mutemp2 <- mu
+          }
+
+          Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mutemp2,
+                                                    weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
+                                                    n.item = n.item )
+        }else{
+          #stop("nrow(X.train) not equal to n.item or n.ranker")
+        }
       }
     }
 
 
-    # update Z.mat given (alpha, beta) or equivalently mu
-
-    # update (alpha, beta) or equivalently mu
-    # omitting the theta step for now,
-    # although this would ideally be edited for BART and included to speed up convergence
 
 
+    #### draw item-intercepts (optional) #############
 
-    #
-    # mean.para.update = GibbsUpMuGivenLatentGroup(Z.mat = Z.mat, X.mat = X.mat, weight.vec = rep(1, n.ranker),
-    #                                              sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
-    #                                              n.ranker = n.ranker, n.item = n.item,
-    #                                              p.cov = p.cov, para.expan = para.expan)
-    #
-    #     ### for check only
-    #     Z.mat = Z.mat/mean.para.update$theta
-    #
-    #     alpha = mean.para.update$alpha
-    #     beta = mean.para.update$beta
+    if(item_intercepts == TRUE){
+      if(np_errors == TRUE){
+        stop("code not currently compatible with both item_intercepts == TRUE and np_errors == TRUE, just one or the other, or neither.")
+      }
+      Zmin_mu <- as.matrix(as.vector(Z.mat) - mu,
+                           nrow = nrow(Z.mat),
+                           nrow = ncol(Z.mat))
 
-    # mu = as.vector( alpha + X.mat %*% beta )
-    #
-    # # update hyper para sigma2.alpha and sigma2.beta
-    # sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
-    # if(p.cov > 0){
-    #   sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
-    # }
+      mean.para.update <- GibbsUpMuGivenLatentIndNoCov(Z.mat = Zmin_mu, #X.mat = Xmat.train,
+                                                       weight.vec = rep(1, n.ranker),
+                                                       sigma2.alpha = sigma2.alpha, #sigma2.beta = sigma2.beta,
+                                                       n.ranker = n.ranker,
+                                                       n.item = n.item,#p.cov = p.cov,
+                                                       para.expan = FALSE#para.expan
+      )
+
+      # CHECK WHETHER TO IMPLEMENT THIS STEP?
+      # Z.mat = Z.mat/mean.para.update$theta
+
+      alphaintercepts <- mean.para.update$alpha
+      alphafullvec <- rep(alphaintercepts,n.ranker)
+      sigma2.alpha = GibbsUpsigma2(alphaintercepts, nu.alpha, tau2.alpha)
+    }
 
 
+
+
+
+    #### tree samples item loop ###########
     for(item in 1:n.item){
-
-      # print("error after dbarts")
-
       #set the response.
       #Check that 0 is a reasonable initial value
       #perhaps makes more sense to use initial values of Z
-      samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
-      # sampler$setSigma(sigma = 1)
+      if(item_intercepts == TRUE){
+        samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]) -  rep(alphaintercepts[item], n.ranker) )
+      }else{
+        samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+      }
 
       #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
       if(sparse){
         tempmodel <- samplerlist[[item]]$model
-        tempmodel@tree.prior@splitProbabilities <- s_y
+        tempmodel@tree.prior@splitProbabilities <- s_y_list[[item]]
         samplerlist[[item]]$setModel(newModel = tempmodel)
+      }
+
+      if(np_errors == TRUE){
+        weightstemp_y  <- 1/(sigma1_vec_train[(0:(n.ranker-1))*n.item + item]^2)
+        if(ranker_components == FALSE ){
+          if(item_intercepts == TRUE){
+            tempy <- as.vector(Z.mat[item, ]) - rep(mu1_vec_train[item],n.ranker)-  rep(alphaintercepts[item], n.ranker)
+          }else{
+            tempy <- as.vector(Z.mat[item, ]) - rep(mu1_vec_train[item],n.ranker)
+          }
+        }else{
+          if(item_intercepts == TRUE){
+            tempy <-  as.vector(Z.mat[item, ]) - mu1_vec_train[(0:(n.ranker-1))*n.item + item]  -  rep(alphaintercepts[item], n.ranker)
+          }else{
+            tempy <- as.vector(Z.mat[item, ]) - mu1_vec_train[(0:(n.ranker-1))*n.item + item]
+          }
+        }
+        samplerlist[[item]]$setResponse(y = tempy)
+        samplerlist[[item]]$setSigma(sigma = 1)
+        samplerlist[[item]]$setWeights(weights = weightstemp_y)
       }
 
       #mu = as.vector( alpha + X.mat %*% beta )
@@ -52026,6 +52241,435 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
 
 
+    if(np_errors == TRUE){
+
+      # add Zmat test draws?
+
+      ######### 4 draw components of mixture ####################
+      # print(" 4 draw components of mixture")
+
+      temp_loop_len <- num_obs_ztrain
+
+      if(ranker_components==TRUE){
+        temp_loop_len <- num_obs_ztrain
+      }else{
+        temp_loop_len <- num_obs_ztrain/n.ranker
+
+      }
+
+      qi0vec <- alpha*dt_ls(as.vector(Z.mat)[1:temp_loop_len],
+                            df = nu0,
+                            mu = mu[1:temp_loop_len],
+                            sigma =  lambda0*(1 + (1/k0)) )
+
+      #loop over individuals for updates
+      for(i in 1:temp_loop_len){
+
+        # qi0 <- alpha*dt_ls(as.vector(Z.mat)[i],
+        #                    df = nu0,
+        #                    mu = mu[i],
+        #                    sigma =  lambda0*(1 + (1/k0)) )
+
+
+        qi0 <- qi0vec[i]
+
+        # print("qi0 = ")
+        # print(qi0)
+        #
+        #
+        # print("mu[i] = ")
+        # print(mu[i])
+        #
+        # print("i = ")
+        # print(i)
+        #
+        # print("mu = ")
+        # print(mu)
+        #
+        # print("as.vector(Z.mat)[i] = ")
+        # print(as.vector(Z.mat)[i])
+        #
+        #
+        # print("alpha = ")
+        # print(alpha)
+
+
+        varthetamattemp <- varthetamat[-i,, drop = FALSE]
+        # vartheta_unique_mat <- unique(varthetamattemp)
+
+        # tempcol <- varthetamattemp[,1, drop = FALSE]
+        #
+        # ux = sort(unique(tempcol)) #vartheta_unique_mat[,1, drop = FALSE] #sort(unique(tempcol))
+        # idx = match(tempcol, ux)
+        # tempuniinds <- unique(idx)
+        # tempord <- order(ux[tempuniinds])
+
+        tempcol <- varthetamattemp[,1, drop = FALSE]
+
+        # THERE IS PROBABLY A MUCH FASTER WAY OF DOING THIS JUST BY UPDATING IN ITERATION
+        # BY ACCOUNTING FOR LAST INCLUDED NUMBER AND DROPPPED ROW i
+
+        tempord <- order(tempcol, method = "radix")
+        tempsort <- tempcol[tempord]
+        tempuniinds <- tempord[!duplicated(tempsort)]
+        # tempuniinds <- unique(match(tempsort,tempcol))
+        counts_ord <- rle2(tempsort)[,2]
+        vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
+
+
+        #also try split(seq_along(vec), vec)
+
+
+        # tempord <- order(unique(varthetamattemp[,1 , drop = FALSE]))
+        #         tempord <- order(vartheta_unique_mat[,1 , drop = FALSE])
+
+
+        # print("vartheta_unique_mat = ")
+        # print(vartheta_unique_mat)
+
+
+        # print("tempord = ")
+        # print(tempord)
+        #          vartheta_unique_mat <- vartheta_unique_mat[tempord, , drop = FALSE]
+
+
+        # print("vartheta_unique_mat = ")
+        # print(vartheta_unique_mat)
+
+        #       tempcol <- varthetamattemp[,1, drop = FALSE]
+
+        # counts_ord <- table(varthetamattemp[,1, drop = FALSE])
+
+        #        ux = vartheta_unique_mat[,1, drop = FALSE] #sort(unique(tempcol))
+        # ux = sort(unique(tempcol))
+        # print("ux = ")
+        # print(ux)
+        #        idx = match(tempcol, ux)
+
+        # print("idx = ")
+        # print(idx)
+        #
+        # print("length(ux)")
+        # print(length(ux))
+        # counts_ord = tabulate(idx, nbins=length(ux))
+
+
+        num_unique <- nrow(vartheta_unique_mat)
+
+        # print("counts_ord = ")
+        # print(counts_ord)
+
+        # print("num_unique = ")
+        # print(num_unique)
+
+        if( sum(counts_ord) != temp_loop_len-1 ){
+          print("counts_ord = ")
+          print(counts_ord)
+          print("num_unique = ")
+          print(num_unique)
+          print("n-1 = ")
+          print(temp_loop_len-1)
+          print("sum(counts_ord) = ")
+          print(sum(counts_ord))
+
+          stop("Bug in count of unique values")
+        }
+
+        if( length(counts_ord) != num_unique ){
+          print("counts_ord = ")
+          print(counts_ord)
+          print("num_unique = ")
+          print(num_unique)
+
+          stop("Bug in count of unique values")
+        }
+
+        q_rs <- rep(NA, nrow(vartheta_unique_mat))
+
+        q_rs <- counts_ord*fastnormdens(as.vector(Z.mat)[i],
+                                        mean = mu[i] + vartheta_unique_mat[,1],
+                                        sd =  vartheta_unique_mat[,2])
+
+        # print("q_rs = ")
+        # print(q_rs)
+        #
+        # print("counts_ord = ")
+        # print(counts_ord)
+        # print("as.vector(Z.mat)[i] = ")
+        # print(as.vector(Z.mat)[i])
+        #
+        # print("counts_ord = ")
+        # print(counts_ord)
+        # print("vartheta_unique_mat[,1]= ")
+        # print(vartheta_unique_mat[,1])
+
+
+        # for(j in 1:num_unique){
+        #   q_rs[j] <- counts_ord[j]*fastnormdens(as.vector(Z.mat)[i],
+        #                                  mean = vartheta_unique_mat[j,1],
+        #                                  sd =  vartheta_unique_mat[j,2])
+        # }
+
+        tempdemon <- qi0 + sum(q_rs)
+
+        qi0 <- qi0/tempdemon
+        q_rs <- q_rs/tempdemon
+
+
+        # print("q_rs = ")
+        # print(q_rs)
+        # print("qi0 = ")
+        # print(qi0)
+
+
+        rprime <- sample(0:num_unique, size = 1, replace = TRUE, prob = c(qi0, q_rs))
+
+        if(rprime>0){
+          varthetamat[i,] <- vartheta_unique_mat[rprime,]
+          mu1_vec_train[i] <- varthetamat[i,1]
+          sigma1_vec_train[i] <- varthetamat[i,2]
+
+        }else{
+          varthetamat[i,2] <- sqrt(1/rgamma(n = 1,
+                                            shape =  (nu0+1)/2,
+                                            rate = (nu0*lambda0/2) + (as.vector(Z.mat)[i] -  mu[i] )^2/( 2*(1 + 1/k0))  ) )
+
+          varthetamat[i,1] <- rnorm(n=1,
+                                    mean =  (as.vector(Z.mat)[i] -  mu[i] )/(k0+1) ,
+                                    sd =  varthetamat[i,2]/sqrt(k0+1) )
+
+          mu1_vec_train[i] <- varthetamat[i,1]
+          sigma1_vec_train[i] <- varthetamat[i,2]
+
+
+        }
+
+
+      }
+
+
+
+      ######### 5 mixing step ##########################
+      # print("5 mixing step")
+
+
+      vartheta_unique_mat <- unique(varthetamat)
+
+      for(j in 1:nrow(vartheta_unique_mat)){
+
+        clust_inds <- which(varthetamat[,1, drop = FALSE] == vartheta_unique_mat[j,1])
+
+        n_j <- length(clust_inds)
+
+        clust_mean <- mean(as.vector(Z.mat)[clust_inds] -  mu[clust_inds])
+
+        varthetamat[clust_inds,2] <- sqrt(1/rgamma(n = 1, #n_j,
+                                                   shape =  (nu0+n_j)/2,
+                                                   rate = (nu0*lambda0/2) + sum((as.vector(Z.mat)[clust_inds] -  mu[clust_inds] - clust_mean )^2)/2 +
+                                                     (k0*n_j/( k0 + n_j) )*( clust_mean^2 / 2) ) )
+
+        varthetamat[clust_inds,1] <- rnorm(n= 1, #n_j,
+                                           mean =  (n_j * clust_mean )/(k0+n_j) ,
+                                           sd =  varthetamat[clust_inds,2]/sqrt(k0+n_j) )
+
+        mu1_vec_train[clust_inds] <- varthetamat[clust_inds,1]
+        sigma1_vec_train[clust_inds] <- varthetamat[clust_inds,2]
+
+
+      }
+
+
+
+      ######### 6 sample alpha ######################
+      # print("6 sample alpha")
+
+      vartheta_unique_mat <- unique(varthetamat)
+
+
+      # This step can be implemented using the prior of van Hasselt (2011)
+      # or the prior of George et al. (2019), McCulloch et al. (2021) ans Conley et al. (2008)
+
+      # count number of unique mixture components
+      # there is probably a more efficient way of doing this
+
+      # create a matrix in which each row contains all of an individual's mixture component parameters
+
+      # varthetamat <- cbind(mu1_vec_train, mu2_vec_train, phi1_vec_train, gamma1_vec_train)
+      # varthetamat_test <- cbind(mu1_vec_test, mu2_vec_test, phi1_vec_test, gamma1_vec_test)
+
+      #obtain the unique rows (components)
+      vartheta_unique_mat <- unique(varthetamat)
+
+      #number of unique components
+      k_uniq <- nrow(vartheta_unique_mat)
+
+
+      if(alpha_prior == "vh"){
+
+        #########  VH Step 6 a: Sample auxiliary variable kappa  ######################################################
+
+        kappa_aux = rbeta(n = 1, shape1 = alpha+1,
+                          shape2 = temp_loop_len #num_obs_ztrain
+        )
+
+        #########  VH Step 6 b: Sample alpha from a mixture of gamma distributions  ######################################################
+
+        #obtain the mixing probability
+        p_kappa <- (c1+k_uniq-1)/(temp_loop_len*#num_obs_ztrain*
+                                    (c2-log(kappa_aux))+c1+k_uniq-1)
+
+        #sample a mixture component
+        mix_draw <- rbinom(1,1,p_kappa)
+
+        # draw alpha from the drawn component
+        if(mix_draw==1){
+          alpha <- rgamma(1,shape = c1 + k_uniq, rate = c2 - log(kappa_aux))
+        }else{
+          alpha <- rgamma(1,shape = c1 + k_uniq - 1, rate = c2 - log(kappa_aux))
+
+        }
+
+
+
+
+      }else{
+        if(alpha_prior == "george"){
+
+          #Calculate alpha_min and alpha_max
+          Imin <- 1
+          Imax <- floor(0.1*n)
+
+          #consider IVBART prior
+          # Imin <- 2
+          # Imax <- floor(0.1*n)+1
+
+
+          if(floor(0.1*n)<=1){
+            stop("Not enough observations for Prior of George et al. (2019)")
+          }
+
+          psiprior <- 0.5
+
+          # from ivbart package code
+          # https://github.com/rsparapa/bnptools/blob/master/ivbart/R/amode.R
+          egamm = 0.5772156649
+          # tempmin= digamma(Imin) - log(egamm+log(n))
+          # tempmax= digamma(Imax) - log(egamm+log(n))
+          tempmin= digamma(Imin) - log(egamm+log(temp_loop_len))
+          tempmax= digamma(Imax) - log(egamm+log(temp_loop_len))
+
+          alpha_min <- exp(tempmin)
+          alpha_max <- exp(tempmax)
+          alpha_values =  seq(from=alpha_min,to=alpha_max,length.out=alpha_gridsize)
+          temp_aprior = 1 - (alpha_values-alpha_min)/(alpha_max-alpha_min)
+          temp_aprior = temp_aprior^psiprior
+          # temp_aprior = temp_aprior/sum(temp_aprior)
+
+
+          log_tempvals <- k_uniq*log(alpha_values) + lgamma(alpha_values) - lgamma(temp_loop_len + #num_obs_ztrain#n+
+                                                                                     alpha_values)
+
+          # print("log_tempvals = ")
+          # print(log_tempvals)
+          # print("temp_aprior = ")
+          # print(temp_aprior)
+
+          temp_kgivenalpha <- exp(log_tempvals)
+
+          # temp_kgivenalpha <- ((alpha_values)^(k_uniq))*gamma(alpha_values)/gamma(n+alpha_values)
+          temp_alpha_postprobs <- temp_kgivenalpha*temp_aprior
+
+
+          # print("temp_kgivenalpha = ")
+          # print(temp_kgivenalpha)
+
+
+          # print("gamma(alpha_values) = ")
+          # print(gamma(alpha_values))
+          #
+          #
+          # print("gamma(n+alpha_values) = ")
+          # print(gamma(n+alpha_values))
+          #
+          #
+          # print("alpha_values = ")
+          # print(alpha_values)
+          #
+          # print("temp_kgivenalpha = ")
+          # print(temp_kgivenalpha)
+
+          # print("temp_aprior = ")
+          # print(temp_aprior)
+          #
+          # print("temp_alpha_postprobs = ")
+          # print(temp_alpha_postprobs)
+
+          post_probs_alphs = temp_alpha_postprobs/sum(temp_alpha_postprobs)
+
+          # print("post_probs_alphs = ")
+          # print(post_probs_alphs)
+
+          #sample from 1 to alpha_gridsize
+          index_alpha <- sample.int(n = alpha_gridsize, size = 1, prob = post_probs_alphs, replace = TRUE)
+
+          alpha <- alpha_values[index_alpha]
+
+
+        }else{
+          stop("Alpha prior must be vh or george")
+        }
+
+      }
+
+
+
+
+      ########### draw y value predictions ##############################
+      # not sure where to make these draws (relative to other steps)
+      # print("draw y value predictions ")
+
+      if( nrow(X.test) >0 ){
+        # must draw test parameter values
+        test_clusts <-  sample(0:temp_loop_len,
+                               size = num_obs_ztest,
+                               replace = TRUE,
+                               prob = c(alpha/(alpha+temp_loop_len),
+                                        rep(1/(alpha+temp_loop_len) ,
+                                            temp_loop_len) ))
+
+        if(sum(test_clusts >0)==0){
+          # skip
+        }else{
+          sigma1_vec_test[test_clusts > 0] <- sigma1_vec_train[test_clusts[test_clusts > 0]  ]
+          mu1_vec_test[test_clusts > 0] <- mu1_vec_train[test_clusts[test_clusts > 0]  ]
+        }
+
+        if(sum(test_clusts ==0)==0){
+          # skip
+        }else{
+          # draw from prior
+          numzeros <- sum(test_clusts ==0)
+
+          sigma1_vec_test[test_clusts ==0] <- sqrt(1/rgamma(n = numzeros,
+                                                            shape =  nu0/2,
+                                                            rate = nu0*lambda0/2) )
+
+          mu1_vec_test[test_clusts ==0] <- rnorm(n = numzeros,
+                                                 mean = mu0,
+                                                 sd = sigma1_vec_test[test_clusts ==0]/sqrt(k0))
+
+        }
+      }
+    }
+
+
+
+
+
+
+
+
+
     # store value at this iteration
     if(keep_zmat==TRUE){
       draw$Z.mat[,,iter] = Z.mat
@@ -52037,10 +52681,19 @@ RObart_ItemTrees <- function(pair.comp.ten,
     # draw$sigma2.alpha[iter] = sigma2.alpha
     # draw$sigma2.beta[iter] = sigma2.beta
 
+    if(item_intercepts == TRUE){
+      draw$alphaintercepts[,iter] <- alphaintercepts
+      draw$mu_plus_alpha[,iter] <- mu + alphafullvec
+    }
+
+
     if( nrow(X.test) >0 ){
       # draw$mu_test[,iter] <- samplestemp_list[[item]]$test[,1]
       for(item in 1:n.item){
-        draw$mu_test[(0:(num_test_rankers-1))*n.item + item,1] <- samplestemp_list[[item]]$test[,1]
+        draw$mu_test[(0:(num_test_rankers-1))*n.item + item,iter] <- samplestemp_list[[item]]$test[,1]
+        if(item_intercepts == TRUE){
+          draw$mu_plus_alpha_test[(0:(num_test_rankers-1))*n.item + item,iter] <- samplestemp_list[[item]]$test[,1] + rep(alphaintercepts[item],num_test_rankers)
+        }
       }
     }
 
@@ -52048,9 +52701,9 @@ RObart_ItemTrees <- function(pair.comp.ten,
       for(item in 1:n.item)
       draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
       # draw$alpha_s_z_store[iter] <- alpha_s_z
-      draw$var_count_y_store[iter, , item] <- varcount_list[[item]]
+      draw$var_count_y_store[, iter, item] <- varcount_list[[item]]
       # draw$var_count_z_store[iter,] <- var_count_z
-      draw$s_prob_y_store[iter, , item] <- s_y_list[[item]]
+      draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
       # draw$s_prob_z_store[iter,] <- s_z
     }
 
@@ -52073,6 +52726,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
 #' @import truncnorm
 #' @import mvtnorm
 #' @import dbarts
+#' @import accelerometry
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{M} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param X.mat An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
 #' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
@@ -52145,7 +52799,8 @@ RObartnp <- function(pair.comp.ten,
                      sparse = FALSE,
                      alpha_a_y = 0.5,
                      alpha_b_y = 1,
-                     alpha_split_prior = TRUE){
+                     alpha_split_prior = TRUE,
+                     n.burnin = 0 ){
   ## store MCMC draws
 
   # print("begin function")
@@ -52340,7 +52995,7 @@ RObartnp <- function(pair.comp.ten,
       if(ranker_components == FALSE ){
         length_mu1test <- n.item
       }else{
-        length_mu1test <- n.item*n.ranker
+        length_mu1test <- n.item*num_test_rankers
       }
     }
 
@@ -52388,6 +53043,7 @@ RObartnp <- function(pair.comp.ten,
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
     }
 
+    #### initialize trees ##########
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -52438,6 +53094,7 @@ RObartnp <- function(pair.comp.ten,
     # sampler$setSigma(sigma = 1)
 
     #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+
 
     if(sparse){
       tempmodel <- sampler$model
@@ -52620,7 +53277,36 @@ RObartnp <- function(pair.comp.ten,
     if(sum(test_clusts >0)==0){
       # skip
     }else{
+
+
+      if(length(sigma1_vec_test[test_clusts > 0]) != length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] )){
+
+        print("test_clusts = ")
+        print(test_clusts )
+
+        print("test_clusts[test_clusts > 0]  = ")
+        print(test_clusts[test_clusts > 0] )
+
+        print("length(test_clusts[test_clusts > 0] ) = ")
+        print(length(test_clusts[test_clusts > 0] ))
+
+
+        print("length(sigma1_vec_test[test_clusts > 0]) = ")
+        print(length(sigma1_vec_test[test_clusts > 0]))
+
+        print("length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] ) = ")
+        print(length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] ))
+
+        print("sigma1_vec_test[test_clusts > 0] = ")
+        print(sigma1_vec_test[test_clusts > 0])
+
+        stop(" initialization length(sigma1_vec_test[test_clusts > 0]) != length( sigma1_vec_train[test_clusts[test_clusts > 0]  ]")
+
+      }
+
       sigma1_vec_test[test_clusts > 0] <- sigma1_vec_train[test_clusts[test_clusts > 0]  ]
+
+
       mu1_vec_test[test_clusts > 0] <- mu1_vec_train[test_clusts[test_clusts > 0]  ]
     }
 
@@ -52640,10 +53326,11 @@ RObartnp <- function(pair.comp.ten,
 
 
 
-  ## Gibbs iteration
+  ####### Gibbs sampler #################
   for(iter in 2:iter.max){
 
 
+    ###### z sampler ##################
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
       #so just take one mu value from each of these
@@ -52700,6 +53387,7 @@ RObartnp <- function(pair.comp.ten,
     # }
 
 
+    #### Tree sampler #################
 
     weightstemp_y  <- 1/(sigma1_vec_train^2)
 
@@ -52795,22 +53483,6 @@ RObartnp <- function(pair.comp.ten,
       }
     }
 
-    # store value at this iteration
-    if(keep_zmat==TRUE){
-      draw$Z.mat[,,iter] = Z.mat
-    }
-
-    # draw$alpha[,iter] = alpha
-    # draw$beta[,iter] = beta
-    draw$mu[,iter] = mu
-    # draw$sigma2.alpha[iter] = sigma2.alpha
-    # draw$sigma2.beta[iter] = sigma2.beta
-
-    draw$alphamixing[iter] <- alpha
-
-    if( nrow(X.test) >0 ){
-      draw$mu_test[,iter] <- samplestemp$test[,1]
-    }
 
 
 
@@ -53211,8 +53883,41 @@ RObartnp <- function(pair.comp.ten,
       if(sum(test_clusts >0)==0){
         # skip
       }else{
+
+        if(length(sigma1_vec_test[test_clusts > 0]) != length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] )){
+
+          print("test_clusts = ")
+          print(test_clusts )
+
+          print("test_clusts[test_clusts > 0]  = ")
+          print(test_clusts[test_clusts > 0] )
+
+          print("length(test_clusts[test_clusts > 0] ) = ")
+          print(length(test_clusts[test_clusts > 0] ))
+
+
+          print("length(sigma1_vec_test[test_clusts > 0]) = ")
+          print(length(sigma1_vec_test[test_clusts > 0]))
+
+          print("length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] ) = ")
+          print(length( sigma1_vec_train[test_clusts[test_clusts > 0]  ] ))
+
+          print("sigma1_vec_test[test_clusts > 0] = ")
+          print(sigma1_vec_test[test_clusts > 0])
+
+          stop(" in loop length(sigma1_vec_test[test_clusts > 0]) != length( sigma1_vec_train[test_clusts[test_clusts > 0]  ]")
+
+        }
+
         sigma1_vec_test[test_clusts > 0] <- sigma1_vec_train[test_clusts[test_clusts > 0]  ]
         mu1_vec_test[test_clusts > 0] <- mu1_vec_train[test_clusts[test_clusts > 0]  ]
+
+
+        mu1_vec_train[clust_inds] <- varthetamat[clust_inds,1]
+        sigma1_vec_train[clust_inds] <- varthetamat[clust_inds,2]
+
+
+
       }
 
       if(sum(test_clusts ==0)==0){
@@ -53232,6 +53937,22 @@ RObartnp <- function(pair.comp.ten,
       }
     }
 
+    ##### store value at this iteration ##########
+    if(keep_zmat==TRUE){
+      draw$Z.mat[,,iter] = Z.mat
+    }
+
+    # draw$alpha[,iter] = alpha
+    # draw$beta[,iter] = beta
+    draw$mu[,iter] = mu
+    # draw$sigma2.alpha[iter] = sigma2.alpha
+    # draw$sigma2.beta[iter] = sigma2.beta
+
+    draw$alphamixing[iter] <- alpha
+
+    if( nrow(X.test) >0 ){
+      draw$mu_test[,iter] <- samplestemp$test[,1]
+    }
 
     if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
@@ -53321,7 +54042,7 @@ RObart <- function(pair.comp.ten,
                    alpha_a_y = 0.5,
                    alpha_b_y = 1,
                    alpha_split_prior = TRUE,
-                   n.burnin = floor(dim(pair.comp.ten)[1]/2),
+                   n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
                    topkinit = FALSE){
   ## store MCMC draws
 
@@ -54035,6 +54756,7 @@ RObart_intercepts <- function(pair.comp.ten,
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
     }
 
+    ####### initilialize trees  ###########
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -54193,12 +54915,12 @@ RObart_intercepts <- function(pair.comp.ten,
     draw$Z.mat[,,1] <- Z.mat
   }
 
-  draw$alphaintercepts[,1] = alphaintercepts
   # draw$beta[,1] = beta
   draw$mu[,1] <- mu
   # draw$sigma2.alpha[1] = sigma2.alpha
   # draw$sigma2.beta[1] = sigma2.beta
 
+  draw$alphaintercepts[,1] = alphaintercepts
   alphafullvec <- rep(alphaintercepts,n.ranker)
   draw$mu_plus_alpha[,1] <- mu + alphafullvec
 
@@ -54215,6 +54937,7 @@ RObart_intercepts <- function(pair.comp.ten,
 
     }else{
       draw$mu_test[,1] <- initial.list$mu_test
+      draw$mu_plus_alpha_test[,1] <- initial.list$mu_test + rep(alphaintercepts,num_test_rankers)
     }
 
   }
@@ -54222,7 +54945,7 @@ RObart_intercepts <- function(pair.comp.ten,
 
 
 
-  ## Gibbs iteration
+  ######## Gibbs sampler  ##########
   for(iter in 2:iter.max){
 
 
@@ -54248,6 +54971,7 @@ RObart_intercepts <- function(pair.comp.ten,
     }
 
 
+    ####### sample intercepts ############
     # update Z.mat given (alpha, beta) or equivalently mu
 
     # update (alpha, beta) or equivalently mu
@@ -54303,6 +55027,10 @@ RObart_intercepts <- function(pair.comp.ten,
     # Zmin_alpha <- as.matrix(as.vector(Z.mat) - alphafullvec,
     #                      nrow = nrow(Z.mat),
     #                      nrow = ncol(Z.mat))
+
+
+    ####### sample trees ############
+
 
     Zmin_alphavec <- as.vector(Z.mat) - alphafullvec
 

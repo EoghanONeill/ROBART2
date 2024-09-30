@@ -35,7 +35,7 @@ RObart(
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE,
-  n.burnin = floor(dim(pair.comp.ten)[1]/2),
+  n.burnin = 0,
   topkinit = FALSE
 )
 }

@@ -42,7 +42,8 @@ RObartnp(
   sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  n.burnin = 0
 )
 }
 \arguments{
