@@ -52312,7 +52312,8 @@ RObart_ItemTrees <- function(pair.comp.ten,
         tempsort <- tempcol[tempord]
         tempuniinds <- tempord[!duplicated(tempsort)]
         # tempuniinds <- unique(match(tempsort,tempcol))
-        counts_ord <- rle2(tempsort)[,2]
+        # counts_ord <- rle2(tempsort)[,2]
+        counts_ord <- rle(tempsort)[,2]
         vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
 
 
@@ -53554,7 +53555,8 @@ RObartnp <- function(pair.comp.ten,
       tempsort <- tempcol[tempord]
       tempuniinds <- tempord[!duplicated(tempsort)]
       # tempuniinds <- unique(match(tempsort,tempcol))
-      counts_ord <- rle2(tempsort)[,2]
+      # counts_ord <- rle2(tempsort)[,2]
+      counts_ord <- rle(tempsort)[,2]
       vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
 
 
@@ -54957,6 +54959,7 @@ RObart_intercepts <- function(pair.comp.ten,
 
       if(any(is.na(Z.mat))){stop("NA in Z.mat")}
 
+      stop("currently does not support nrow(X.train)==n.item")
     }else{
       if(nrow(X.train)==n.item*n.ranker){
         Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat,
@@ -65693,6 +65696,8 @@ if(any(is.na(mu))){
 
       if(any(is.na(Z.mat))){stop("NA in Z.mat")}
 
+      stop("currently does not support nrow(X.train)==n.item")
+
     }else{
       if(nrow(X.train)==n.item*n.ranker){
         # print("Z.mat = ")
@@ -65782,7 +65787,7 @@ if(any(is.na(mu))){
 
     }else{
 
-      mean.para.update = GibbsUpMuGivenLatentInd(Z.mat = Z.mat, X.mat = Xmat.train,
+      mean.para.update = GibbsUpMuGivenLatent_itemcoeffs(Z.mat = Z.mat, X.mat = Xmat.train,
                                                  weight.vec = rep(1, n.ranker),
                                                  sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
                                                  n.ranker = n.ranker,
@@ -65798,16 +65803,35 @@ if(any(is.na(mu))){
       alpha = mean.para.update$alpha
       beta = mean.para.update$beta
 
-      if(any(is.na(beta))){
-        print('item = ')
-        print(item)
-        print('iter = ')
-        print(iter)
-        print("Line 65808 beta = ")
-        print(beta)
-        stop("NA in beta")
-      }
-
+      # if(any(is.na(beta))){
+      #   print('item = ')
+      #   print(item)
+      #   print('iter = ')
+      #   print(iter)
+      #   print("Line 65808 beta = ")
+      #   print(beta)
+      #   stop("NA in beta")
+      # }
+      #
+      # if(any(is.na(alpha))){
+      #   print('item = ')
+      #   print(item)
+      #   print('iter = ')
+      #   print(iter)
+      #   print("Line 65808 alpha = ")
+      #   print(alpha)
+      #   stop("NA in alpha")
+      # }
+      #
+      # if(any(is.na(Xmat.train))){
+      #   print('item = ')
+      #   print(item)
+      #   print('iter = ')
+      #   print(iter)
+      #   print("Line 65808 Xmat.train = ")
+      #   print(Xmat.train)
+      #   stop("NA in Xmat.train")
+      # }
 
       # print("ncol(Xmat.train) = ")
       # print(ncol(Xmat.train))
@@ -65826,19 +65850,40 @@ if(any(is.na(mu))){
 
       #possibly more efficient
       for(item in 1:n.item){
-        mu[ (0:(n.ranker-1))*n.item +item ] <- rep(alpha[item], n.ranker) + Xmat.train[ (0:(n.ranker-1))*n.item +item  , ] %*% beta[ (item-1)*p.cov + (1:p.cov)]
+        mu[ ((0:(n.ranker-1))*n.item) + item ] <- rep(alpha[item], n.ranker) + Xmat.train[ (0:(n.ranker-1))*n.item +item  , ] %*% beta[ (item-1)*p.cov + (1:p.cov)]
         mu_test[ (0:(num_test_rankers-1))*n.item +item ] <- rep(alpha[item], num_test_rankers) + Xmat.test[ (0:(num_test_rankers-1))*n.item + item, ] %*% beta[ (item-1)*p.cov + (1:p.cov)]
+        # if(any(is.na(mu))){
+        #   print('item = ')
+        #   print(item)
+        #   print('iter = ')
+        #   print(iter)
+        #   print('alpha = ')
+        #   print(alpha)
+        #
+        #   print('Xmat.train[ (0:(n.ranker-1))*n.item +item  , ] = ')
+        #   print(Xmat.train[ (0:(n.ranker-1))*n.item +item  , ])
+        #
+        #   print('beta[ (item-1)*p.cov + (1:p.cov)] = ')
+        #   print(beta[ (item-1)*p.cov + (1:p.cov)])
+        #
+        #   print("dim(Xmat.train) = ")
+        #   print(dim(Xmat.train))
+        #
+        #   print("(beta) = ")
+        #   print((beta))
+        #
+        #   print("(0:(n.ranker-1))*n.item +item = ")
+        #   print((0:(n.ranker-1))*n.item +item)
+        #   print("(item-1)*p.cov + (1:p.cov) = ")
+        #   print((item-1)*p.cov + (1:p.cov))
+        #
+        #   print("Line 65825 mu = ")
+        #   print(mu)
+        #   stop("NA in mu")
+        # }
       }
 
-      if(any(is.na(mu))){
-        print('item = ')
-        print(item)
-        print('iter = ')
-        print(iter)
-        print("Line 65825 mu = ")
-        print(mu)
-        stop("NA in mu")
-      }
+
 
       # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
       # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )

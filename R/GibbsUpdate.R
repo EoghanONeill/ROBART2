@@ -30,7 +30,31 @@ GibbsUpLatentGivenRankInd <- function(pair.comp, Z, mu, weight){
       lower = -Inf
     }
 
-    Z[i] = rtruncnorm( 1, lower, upper, mean = mu[i], sd = 1/sqrt(weight) )
+    # if(any(is.complex(lower))){
+    #   print("lower =")
+    #   print(lower)
+    # }
+    #
+    # if(any(is.complex(upper))){
+    #   print("upper =")
+    #   print(upper)
+    # }
+    # if(any(is.complex( mu[i]))){
+    #   print(" mu[i] =")
+    #   print( mu[i])
+    # }
+    #
+    # if(any(is.complex(sqrt(weight)))){
+    #   print("weight =")
+    #   print(weight)
+    # }
+    #
+    # if(any(weight < 0)){
+    #   print("weight =")
+    #   print(weight)
+    # }
+
+    Z[i] <- rtruncnorm( 1, lower, upper, mean = mu[i], sd = 1/sqrt(weight) )
 
 
     if(is.na(Z[i])){
@@ -184,6 +208,16 @@ GibbsUpLatentGivenRankGroupnp <- function(pair.comp.ten, Z.mat,
 GibbsUpLatentGivenRankindividual <- function(pair.comp.ten, Z.mat, mu, weight.vec = rep(1, ncol(Z.mat)),
                                              n.ranker = ncol(Z.mat),
                                              n.item = ncol(pair.comp.ten[,,1])){
+
+  if(any(is.complex(Z.mat))){
+    print("Z.mat =")
+    print(Z.mat)
+  }
+
+  if(any(is.complex(Z.mat))){
+    print("mu =")
+    print(mu)
+  }
   for(j in 1:n.ranker){
     Z.mat[,j] = GibbsUpLatentGivenRankInd(pair.comp.ten[,,j], Z.mat[,j], mu[n.item*(j-1)+(1:n.item)], weight = weight.vec[j])
   }
@@ -359,7 +393,7 @@ GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nro
 
   ####
   #use full V and Z for this
-  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * t(V) %*% V )
+  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * t(V) %*% V, symmetric = TRUE )
   Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = n.item +  p.cov*n.item, ncol = n.item +  p.cov*n.item) %*% t(Sigma.inv.eigen$vectors)
 
   # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
@@ -367,8 +401,43 @@ GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nro
 
   eta = Sigma %*%  lambda
 
-  ###
+  # if(any(is.complex(Sigma.inv.eigen$values))){
+  #
+  #   print("n.item +  p.cov*n.item = ")
+  #   print(n.item +  p.cov*n.item)
+  #
+  #   print(" V = ")
+  #   print(V)
+  #
+  #   print("sum(weight.vec) * t(V) %*% V = ")
+  #   print(sum(weight.vec) * t(V) %*% V)
+  #
+  #   print("t(V) %*% V = ")
+  #   print(t(V) %*% V)
+  #
+  #   print("sum(weight.vec) =")
+  #   print(sum(weight.vec) )
+  #
+  #
+  #
+  #   print("diagLambda = ")
+  #   print(diagLambda)
+  #   print("Sigma.inv.eigen$values = ")
+  #   print(Sigma.inv.eigen$values)
+  #
+  #   print("Sigma.inv.eigen$vectors = ")
+  #   print(Sigma.inv.eigen$vectors)
+  #
+  #   stop("any(is.complex(Sigma.inv.eigen$values))")
+  #
+  # }
 
+  ###
+  # if(any(Sigma.inv.eigen$values < 0)){
+  #   print("Sigma.inv.eigen$values = ")
+  #   print(Sigma.inv.eigen$values)
+  #   stop("any(Sigma.inv.eigen$values < 0)")
+  # }
 
   if(para.expan){
     S = sum( colSums(Z.mat^2) * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
@@ -380,6 +449,12 @@ GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nro
   # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
   alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = n.item + p.cov*n.item, ncol = n.item + p.cov*n.item) %*% rnorm(n.item + p.cov*n.item) )
 
+
+  # if(any(is.complex( alpha.beta))){
+  #   print(" alpha.beta =")
+  #   print( alpha.beta)
+  #   stop("any(is.complex( alpha.beta))")
+  # }
 
   alpha = alpha.beta[c(1:n.item)]
   beta = alpha.beta[-c(1:n.item)]
