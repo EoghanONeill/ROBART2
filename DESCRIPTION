@@ -6,7 +6,6 @@ Author: Eoghan O'Neill, Dingdong Yi, Xinran Li and Jun S. Liu
 Maintainer: Eoghan O'Neill <oneill@ese.eur.nl>
 Description: Bayesian Additive Regression Trees for Rank-Order data. Bayesian analysis for rank data with ranked entities' covariates described in the paper "Bayesian Analysis of Rank Data with Covariates and Heterogeneous Rankers".
 Imports:
-  accelerometry,
   truncnorm, 
   mvtnorm, 
   dbarts,

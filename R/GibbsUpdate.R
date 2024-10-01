@@ -258,6 +258,140 @@ GibbsUpMuGivenLatentGroup <- function(Z.mat, X.mat = matrix(NA, nrow = nrow(Z.ma
 }
 
 
+### Gibbs update for the shared mean mu ###
+### Z.mat[,j]: latent variable vector for jth ranker ###
+### weight.vec[j]: weight for jth ranker ###
+### sigma2.alpha, sigma2.beta: prior parameters for mu = (alpha, beta) ###
+### para.expan: whether use parameter expansion ###
+GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
+                                              X.mat = matrix(NA, nrow = length(Z.vec), ncol = 0),
+                                              weight.vec = rep(1, length(Z.vec)),
+                                              sigma2.alpha = 2,
+                                              sigma2.beta = 1,
+                                              n.ranker = length(Z.vec),
+                                              # n.item = 1, #nrow(Z.mat),
+                                              p.cov = ncol(X.mat),
+                                              para.expan = TRUE){
+  diagLambda = c( rep(sigma2.alpha, 1), rep(sigma2.beta, p.cov) )
+  # V <- cbind( diag(n.item), X.mat )
+
+  # itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+  V <- cbind( 1, X.mat )
+
+  # print("ncol(V) = ")
+  # print(ncol(V))
+  # print("nrow(V) = ")
+  # print(nrow(V))
+  # print("ncol(Z.mat) = ")
+  # print(ncol(Z.mat))
+  # print("nrow(Z.mat) = ")
+  # print(nrow(Z.mat))
+  # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
+
+  ####
+  #use full V and Z for this
+
+  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = 1 +  p.cov) + sum(weight.vec) * t(V) %*% V )
+  Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = 1 +  p.cov, ncol = 1 +  p.cov) %*% t(Sigma.inv.eigen$vectors)
+
+  # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
+  lambda = t(V) %*% as.vector(Z.vec)
+
+  eta = Sigma %*%  lambda
+
+  ###
+
+
+  if(para.expan){
+    S = sum( Z.vec^2 * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
+    theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
+  }else{
+    theta = 1
+  }
+
+  # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
+  alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = 1 + p.cov, ncol = 1 + p.cov) %*% rnorm(1 + p.cov) )
+
+
+  alpha = alpha.beta[c(1:n.item)]
+  beta = alpha.beta[-c(1:n.item)]
+
+  ### parameter move
+  # alpha = alpha - mean(alpha) + mean( rnorm(n.item, mean = 0, sd = sqrt(sigma2.alpha)) )
+
+  return(list(alpha = alpha, beta = beta, theta = theta))
+}
+
+
+
+
+
+
+### Gibbs update for the shared mean mu ###
+### Z.mat[,j]: latent variable vector for jth ranker ###
+### weight.vec[j]: weight for jth ranker ###
+### sigma2.alpha, sigma2.beta: prior parameters for mu = (alpha, beta) ###
+### para.expan: whether use parameter expansion ###
+GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nrow(Z.mat), ncol = 0), weight.vec = rep(1, ncol(Z.mat)), sigma2.alpha = 2, sigma2.beta = 1, n.ranker = ncol(Z.mat), n.item = nrow(Z.mat), p.cov = ncol(X.mat), para.expan = TRUE){
+  diagLambda = c( rep(sigma2.alpha, n.item), rep(sigma2.beta, p.cov*n.item) )
+  # V <- cbind( diag(n.item), X.mat )
+
+  itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+  # V <- cbind( itembinmat,
+  #             itembinmat %x% X.mat )
+  V <- itembinmat
+
+  for(item in 1:n.item){
+    tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(X.mat))
+    tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- X.mat[(0:(n.ranker-1))*n.item + item, ]
+    V <- cbind( V, tempxmat )
+  }
+
+  # print("ncol(V) = ")
+  # print(ncol(V))
+  # print("nrow(V) = ")
+  # print(nrow(V))
+  # print("ncol(Z.mat) = ")
+  # print(ncol(Z.mat))
+  # print("nrow(Z.mat) = ")
+  # print(nrow(Z.mat))
+  # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
+
+  ####
+  #use full V and Z for this
+  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * t(V) %*% V )
+  Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = n.item +  p.cov*n.item, ncol = n.item +  p.cov*n.item) %*% t(Sigma.inv.eigen$vectors)
+
+  # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
+  lambda = t(V) %*% as.vector(Z.mat)
+
+  eta = Sigma %*%  lambda
+
+  ###
+
+
+  if(para.expan){
+    S = sum( colSums(Z.mat^2) * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
+    theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
+  }else{
+    theta = 1
+  }
+
+  # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
+  alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = n.item + p.cov*n.item, ncol = n.item + p.cov*n.item) %*% rnorm(n.item + p.cov*n.item) )
+
+
+  alpha = alpha.beta[c(1:n.item)]
+  beta = alpha.beta[-c(1:n.item)]
+
+  ### parameter move
+  # alpha = alpha - mean(alpha) + mean( rnorm(n.item, mean = 0, sd = sqrt(sigma2.alpha)) )
+
+  return(list(alpha = alpha, beta = beta, theta = theta))
+}
+
+
+
 
 
 

@@ -3204,7 +3204,6 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 #' @import mvtnorm
 #' @import dbarts
 #' @import LinConGauss
-#' @import accelerometry
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{MT} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers and \eqn{T} time periods, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param X.train An \eqn{N} by \eqn{L} training covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
 #' @param X.test An \eqn{N} by \eqn{L} test covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
@@ -52726,7 +52725,6 @@ RObart_ItemTrees <- function(pair.comp.ten,
 #' @import truncnorm
 #' @import mvtnorm
 #' @import dbarts
-#' @import accelerometry
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{M} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param X.mat An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
 #' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
@@ -55754,7 +55752,7 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                                 n.time,
                                 p.cov = ncol(X.train),
                                 iter.max = 5000,
-                                para.expan = TRUE,
+                                para.expan = FALSE,
                                 print.opt = 100,
                                 initial.list = NULL,
                                 n.trees = 50L,
@@ -56799,7 +56797,11 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                                                para.expan = para.expan)
 
 
-
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+      Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+    }
 
     # create Z lag test matrix
 
@@ -57060,7 +57062,7 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                                     n.time,
                                     p.cov = ncol(X.train),
                                     iter.max = 5000,
-                                    para.expan = TRUE,
+                                    para.expan = FALSE,
                                     print.opt = 100,
                                     initial.list = NULL,
                                     n.trees = 50L,
@@ -58035,7 +58037,11 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                                                para.expan = para.expan)
 
 
-
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+      Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+    }
 
     # create Z lag test matrix
 
@@ -58299,7 +58305,7 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                                     n.time,
                                     p.cov = ncol(X.train),
                                     iter.max = 5000,
-                                    para.expan = TRUE,
+                                    para.expan = FALSE,
                                     print.opt = 100,
                                     initial.list = NULL,
                                     n.trees = 50L,
@@ -59267,7 +59273,11 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                                                para.expan = para.expan)
 
 
-
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+      Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+    }
 
     # create Z lag test matrix
 
@@ -59531,7 +59541,7 @@ ARBayesRankCovSimpInds <- function(pair.comp.ten,
                                    n.time,
                                    p.cov = ncol(X.train),
                                    iter.max = 5000,
-                                   para.expan = TRUE,
+                                   para.expan = FALSE,
                                    print.opt = 100,
                                    initial.list = NULL,
                                    n.trees = 50L,
@@ -60050,7 +60060,7 @@ ARBayesRankCovSimpInds <- function(pair.comp.ten,
                                                        para.expan = para.expan)
 
             ### for check only
-            Z.mat = Z.mat/mean.para.update$theta
+            # Z.mat = Z.mat/mean.para.update$theta
 
             Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -60061,7 +60071,11 @@ ARBayesRankCovSimpInds <- function(pair.comp.ten,
               Zlag.mat[,t1] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t1)*n.item*n.ranker)])
 
             }
-
+            if(para.expan){
+              Z.mat = Z.mat/mean.para.update$theta
+              Zlag.mat = Zlag.mat/mean.para.update$theta
+              Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+            }
 
             #update predictor matrix
 
@@ -60088,8 +60102,11 @@ ARBayesRankCovSimpInds <- function(pair.comp.ten,
                                                      para.expan = para.expan)
 
           ### for check only
-          Z.mat = Z.mat/mean.para.update$theta
-
+          if(para.expan){
+            Z.mat = Z.mat/mean.para.update$theta
+            Zlag.mat = Zlag.mat/mean.para.update$theta
+            Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+          }
         }
 
 
@@ -60487,7 +60504,7 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
                                          n.time,
                                       # p.cov = ncol(X.train),
                                       iter.max = 5000,
-                                      para.expan = TRUE,
+                                      para.expan = FALSE,
                                       print.opt = 100,
                                       initial.list = NULL,
                                       n.trees = 50L,
@@ -61568,6 +61585,11 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
                                                p.cov = num_lags,
                                                para.expan = para.expan)
 
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+      Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+    }
 
     alpha = mean.para.update$alpha
     beta = mean.para.update$beta
@@ -61840,7 +61862,7 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
                                           n.time,
                                           # p.cov = ncol(X.train),
                                           iter.max = 5000,
-                                          para.expan = TRUE,
+                                          para.expan = FALSE,
                                           print.opt = 100,
                                           initial.list = NULL,
                                           n.trees = 50L,
@@ -62842,7 +62864,10 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
                                                p.cov = num_lags,
                                                para.expan = para.expan)
 
-
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+    }
     alpha = mean.para.update$alpha
     beta = mean.para.update$beta
     mu = as.vector( rep(alpha, n.ranker*n.time) + (Xmat.train) %*% beta )
@@ -63112,7 +63137,7 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
                                           n.time,
                                           # p.cov = ncol(X.train),
                                           iter.max = 5000,
-                                          para.expan = TRUE,
+                                          para.expan = FALSE,
                                           print.opt = 100,
                                           initial.list = NULL,
                                           n.trees = 50L,
@@ -64109,6 +64134,11 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
                                                para.expan = para.expan)
 
 
+    if(para.expan){
+      Z.mat = Z.mat/mean.para.update$theta
+      Zlag.mat = Zlag.mat/mean.para.update$theta
+    }
+
     alpha = mean.para.update$alpha
     beta = mean.para.update$beta
     mu = as.vector( rep(alpha, n.ranker*n.time) + (Xmat.train) %*% beta )
@@ -64381,7 +64411,7 @@ ARBayesRankCovSimpIndsNoCovars <- function(pair.comp.ten,
                                            n.time,
                                            # p.cov = ncol(X.train),
                                            iter.max = 5000,
-                                           para.expan = TRUE,
+                                           para.expan = FALSE,
                                            print.opt = 100,
                                            initial.list = NULL,
                                            n.trees = 50L,
@@ -64921,7 +64951,10 @@ ARBayesRankCovSimpIndsNoCovars <- function(pair.comp.ten,
                                                    para.expan = para.expan)
 
         ### for check only
-        Z.mat = Z.mat/mean.para.update$theta
+        if(para.expan){
+          Z.mat = Z.mat/mean.para.update$theta
+          Zlag.mat = Zlag.mat/mean.para.update$theta
+        }
 
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -64959,8 +64992,10 @@ ARBayesRankCovSimpIndsNoCovars <- function(pair.comp.ten,
                                                  para.expan = para.expan)
 
       ### for check only
-      Z.mat = Z.mat/mean.para.update$theta
-
+      if(para.expan){
+        Z.mat = Z.mat/mean.para.update$theta
+        Zlag.mat = Zlag.mat/mean.para.update$theta
+      }
     }
 
 
@@ -65322,6 +65357,521 @@ ARBayesRankCovSimpIndsNoCovars <- function(pair.comp.ten,
   return(draw)
 }
 
+
+
+
+#' Linear model for Bayesian Analysis of Rank-Order data with entities' Covariates. Includes test data and ranker-item specific variables. Item-specific COefficients.
+#'
+#' Implement the Bayesian model for rank-order data with ranked entities' covariates information and lags of the latent variable.
+#' @import truncnorm
+#' @import mvtnorm
+#' @import dbarts
+#' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{M} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
+#' @param X.mat An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
+#' @param tau2.alpha The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param nu.alpha The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_alpha}.
+#' @param tau2.beta The scale parameter for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param nu.beta The d.f. for the scaled inverse chi-squared prior on \eqn{\sigma^2_beta}.
+#' @param iter.max Number of iterations for Gibbs sampler.
+#' @param para.expan ?unused? Logical variable for whether using parameter expansion in the Gibbs sampler.
+#' @param print.opt Print every print.optnumber of Gibbsa samples.
+#' @param initial.list List of initial values for the Gibbs sample. If not null, must contain elements named Z.mat and mu.
+#' @param n.trees (dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.
+#' @param n.chains (dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).
+#' @param n.threads  (dbarts option) A positive integer controlling how many threads will be used for various internal calculations, as well as the number of chains. Internal calculations are highly optimized so that single-threaded performance tends to be superior unless the number of observations is very large (>10k), so that it is often not necessary to have the number of threads exceed the number of chains.
+#' @param printEvery (dbarts option)If verbose is TRUE, every printEvery potential samples (after thinning) will issue a verbal statement. Must be a positive integer.
+#' @param printCutoffs (dbarts option) A non-negative integer specifying how many of the decision rules for a variable are printed in verbose mode
+#' @param rngKind (dbarts option) Random number generator kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads.
+#' @param rngNormalKind (dbarts option) Random number generator normal kind, as used in set.seed. For type "default", the built-in generator will be used if possible. Otherwise, will attempt to match the built-in generator’s type. Success depends on the number of threads and the rngKind
+#' @param rngSeed (dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.
+#' @param updateState (dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.
+#' @param diff_num_test_rankers Equal to 1 if there is a different number of rankers in the test data than in the training data. (assumes no structure to input data)
+#' @param keep_zmat Boolean. If equal to TRUE output the draws of Zmat for training data and test data
+#' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
+#' @export
+BayesRankCovSimp_ItemCoeffs <- function(pair.comp.ten,
+                                 X.train = matrix(NA, nrow =dim(pair.comp.ten)[1], ncol = 0),
+                                 X.test = matrix(NA, nrow =0, ncol = 0),
+                                 tau2.alpha = 5^2,
+                                 nu.alpha = 3,
+                                 tau2.beta = 5^2,
+                                 nu.beta = 3,
+                                 n.item = dim(pair.comp.ten)[1],
+                                 n.ranker = dim(pair.comp.ten)[3],
+                                 p.cov = ncol(X.train),
+                                 iter.max = 5000,
+                                 para.expan = FALSE,
+                                 print.opt = 100,
+                                 initial.list = NULL,
+                                 n.trees = 50L,
+                                 n.burn = 0L,
+                                 n.samples = 1L,
+                                 n.thin = 1L,
+                                 n.chains = 1,
+                                 n.threads = guessNumCores(),
+                                 printEvery = 100L,
+                                 printCutoffs = 0L,
+                                 rngKind = "default",
+                                 rngNormalKind = "default",
+                                 rngSeed = NA_integer_,
+                                 updateState = FALSE,
+                                 num_lags = 1,
+                                 diff_num_test_rankers = 0,
+                                 keep_zmat = FALSE,
+                                 topkinit = FALSE,
+                                 item_sigbeta = FALSE){
+  ## store MCMC draws
+
+  # print("begin function")
+
+  length_mu <- 1
+
+  if(nrow(X.train)==n.item){
+    length_mu <- n.item
+  }else{
+    if(nrow(X.train)==n.item*n.ranker){
+      length_mu <- n.item*n.ranker
+    }else{
+      stop("nrow(X.train) not equal to n.item or n.ranker")
+    }
+
+  }
+
+
+  length_mu_test <- 1
+  num_test_rankers <- 1
+
+
+  if(nrow(X.test) >0 ){
+    if(diff_num_test_rankers==1){
+      length_mu_test <- nrow(X.test)
+      num_test_rankers <- length_mu_test/n.item
+      if(num_test_rankers%%1 !=0){
+        print("number of test data observations must be an integer multiple of number of items for number of test data rankers to be an integer.")
+      }
+    }else{
+      if(nrow(X.train)==n.item){
+        length_mu_test <- n.item*n.ranker
+
+      }else{
+        length_mu_test <- nrow(X.test)
+        num_test_rankers <- length_mu_test/n.item
+        if(num_test_rankers%%1 !=0){
+          print("number of test data observations must be an integer multiple of number of items for number of test data rankers to be an integer.")
+        }
+      }
+    }
+  }
+
+
+
+  draw = list(
+    # Z.mat = array(NA, dim = c(n.item, n.ranker, iter.max)),
+    alpha = array(NA, dim = c(n.item, iter.max)),
+    beta = array(NA, dim = c(p.cov*n.item, iter.max)),
+    #if the x values do not vary over rankers, then there will only be n.item unique x values
+    mu = array(NA, dim = c(length_mu, iter.max)),
+    #
+    #
+    #can have mu of dimension n.item*n.ranker to operationalize rnanker-specific mu values, then need to edit gibbs update of Z
+    #mu = array(NA, dim = c(n.item*n.ranker, iter.max))#,
+    sigma2.alpha = rep(NA, iter.max),
+    sigma2.beta = rep(NA, iter.max)
+  )
+
+  if(keep_zmat==TRUE){
+    draw$Z.mat = array(NA, dim = c(n.item, n.ranker, iter.max))
+  }
+
+  if(nrow(X.test) >0 ){
+    draw$mu_test <- array(NA, dim = c(length_mu_test, iter.max))
+  }
+
+  if(item_sigbeta){
+    draw$sigma2.beta.mat = array(NA, dim = c(n.item, iter.max))
+  }
+
+
+
+
+  if(is.null(initial.list)){
+    ## initial values for Z
+    # Z.mat = matrix(NA, nrow = n.item, ncol = n.ranker)
+    # for(j in 1:n.ranker){
+    #   Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] = (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+    # }
+
+
+
+    ## initial values for Z
+    Z.mat <- matrix(NA, nrow = n.item, ncol = n.ranker)
+    for(j in 1:n.ranker){
+      if(topkinit == TRUE){
+
+        up.order = rank(-rowSums( pair.comp.ten[,,j], na.rm = TRUE ) + 1)
+        rankstemp <- up.order
+        tempsort <- sort(rankstemp, decreasing = TRUE, index.return = TRUE )
+
+        Z.mat[ tempsort$ix , j] <-
+          qnorm(  tempsort$x   /(n.item+1)) +
+          rnorm(n = 1, mean = 0, sd = 0.01)
+
+      }else{
+        Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+
+        # print("rowSums( pair.comp.ten[,,j], na.rm = TRUE ) = ")
+        # print(rowSums( pair.comp.ten[,,j], na.rm = TRUE ))
+        #
+        # print("sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix = ")
+        # print(sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix)
+        #
+        # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+        # # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(1 : n.item) - (1+n.item)/2)/sd(c(n.item : 1))
+        #
+        # print("j=")
+        # print(j)
+        # print("Z.mat[,j] = ")
+        # print(Z.mat[,j])
+      }
+      # Z.mat[sort( rowSums( pair.comp.ten[,,j], na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix, j] <- (c(n.item : 1) - (1+n.item)/2)/sd(c(n.item : 1))
+    }
+
+    ## initial values
+    # alpha = rep(0, n.item)
+    # beta = rep(0, p.cov)
+
+    # print("create data matrices for dbarts")
+
+    #must repeat x matrix if only n.item by the number of covaraites
+    #otherwise, the matrix has ranking specific covariates
+    if(nrow(X.train)==n.item){
+      Xmat.train <- matrix( rep( t( X.train ) , n.ranker ) , ncol =  ncol(X.train) , byrow = TRUE )
+
+      #colnames(Xmat.train) <- c("y", "x","z","w")
+
+      if(nrow(X.test) >0 ){
+        # print("nrow(X.test) = ")
+        # print(nrow(X.test))
+
+        Xmat.test <- matrix( rep( t( X.test ) , n.ranker ) , ncol =  ncol(X.test) , byrow = TRUE )
+        #colnames(Xmat.test) <- c("x","z","w")
+      }
+    }else{
+      if(nrow(X.train)==n.item*n.ranker){
+        Xmat.train <-  X.train
+        if(nrow(X.test)>0 ){
+          Xmat.test  <- X.test
+        }
+      }else{
+        stop("nrow(X.train) not equal to n.item or n.item*n.ranker")
+      }
+
+    }
+
+
+
+    # print("ncol(Xmat.train) = ")
+    # print(ncol(Xmat.train))
+    # print("nrow(Xmat.train) = ")
+    # print(nrow(Xmat.train))
+    # print("n.ranker = ")
+    # print(n.ranker)
+    # print("n.item = ")
+    # print(n.item)
+
+    ## initial values for alpha, beta and thus mu
+    alpha = rep(0, n.item)
+    beta = rep(0, p.cov*n.item)
+
+    tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(Xmat.train))
+    tempxmat[(0:(n.ranker-1))*n.item + 1, ]  <- Xmat.train[(0:(n.ranker-1))*n.item + 1, ]
+    AllX.train <- tempxmat
+    tempxmat <- matrix(0, nrow = num_test_rankers*n.item, ncol = ncol(Xmat.test))
+    tempxmat[(0:(num_test_rankers-1))*n.item + 1, ]  <- Xmat.test[(0:(num_test_rankers-1))*n.item + 1, ]
+    AllX.test <- tempxmat
+
+    # AllX.train <- Xmat.train[(0:(n.ranker-1))*n.item + 1, ]
+    # AllX.test <- Xmat.test[(0:(num_test_rankers-1))*n.item + 1, ]
+
+    for(item in 2:n.item){
+      tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(Xmat.train))
+      tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- Xmat.train[(0:(n.ranker-1))*n.item + item, ]
+      AllX.train <- cbind( AllX.train, tempxmat )
+
+      tempxmat <- matrix(0, nrow = num_test_rankers*n.item, ncol = ncol(Xmat.test))
+      tempxmat[(0:(num_test_rankers-1))*n.item + item, ]  <- Xmat.test[(0:(num_test_rankers-1))*n.item + item, ]
+      AllX.test <- cbind( AllX.test, tempxmat )
+    }
+
+
+    # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+    # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+    mu = as.vector( rep(alpha, n.ranker) + AllX.train %*% beta )
+    mu_test = as.vector( rep(alpha, num_test_rankers) + AllX.test %*% beta )
+
+
+    ## initial values for sigma2.alpha and sigma2.beta
+    sigma2.alpha = tau2.alpha
+    sigma2.beta = tau2.beta
+    if(item_sigbeta){
+      sigma2.beta.vec <- rep(tau2.beta, n.item)
+    }
+
+  }else{
+    Z.mat = initial.list$Z.mat
+    alpha = initial.list$alpha
+    beta = initial.list$beta
+
+    tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(Xmat.train))
+    tempxmat[(0:(n.ranker-1))*n.item + 1, ]  <- Xmat.train[(0:(n.ranker-1))*n.item + 1, ]
+    AllX.train <- tempxmat
+    tempxmat <- matrix(0, nrow = num_test_rankers*n.item, ncol = ncol(Xmat.test))
+    tempxmat[(0:(num_test_rankers-1))*n.item + 1, ]  <- Xmat.test[(0:(num_test_rankers-1))*n.item + 1, ]
+    AllX.test <- tempxmat
+
+    for(item in 2:n.item){
+      tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(Xmat.train))
+      tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- Xmat.train[(0:(n.ranker-1))*n.item + item, ]
+      AllX.train <- cbind( AllX.train, tempxmat )
+
+      tempxmat <- matrix(0, nrow = num_test_rankers*n.item, ncol = ncol(Xmat.test))
+      tempxmat[(0:(num_test_rankers-1))*n.item + item, ]  <- Xmat.test[(0:(num_test_rankers-1))*n.item + item, ]
+      AllX.test <- cbind( AllX.test, tempxmat )
+    }
+
+
+    # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+    # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+    mu = as.vector( rep(alpha, n.ranker) + AllX.train %*% beta )
+    mu_test = as.vector( rep(alpha, num_test_rankers) + AllX.test %*% beta )
+
+    # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+    # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+
+    sigma2.alpha = initial.list$sigma2.alpha
+    sigma2.beta = initial.list$sigma2.beta
+    if(item_sigbeta){
+      sigma2.beta.vec <- initial.list$sigma2.beta.vec
+    }
+  }
+
+if(any(is.na(mu))){
+  print("Line 65661. mu = ")
+  print(mu)
+  stop("NA in mu")
+}
+
+  ## store initial value
+  if(keep_zmat==TRUE){
+    draw$Z.mat[,,1] = Z.mat
+  }
+
+  draw$alpha[,1] = alpha
+  draw$beta[,1] = beta
+  draw$mu[,1] = mu
+  draw$mu_test[,1] = mu_test
+  draw$sigma2.alpha[1] = sigma2.alpha
+  draw$sigma2.beta[1] = sigma2.beta
+
+  if(item_sigbeta){
+    draw$sigma2.beta.mat[,1] <- sigma2.beta.vec
+  }
+
+  ## Gibbs iteration
+  for(iter in 2:iter.max){
+
+
+    if(nrow(X.train)==n.item){
+      #each n.ranker values of u should be equal,
+      #so just take one mu value from each of these
+      #this keeps the dimension of mu equal to n.item
+      #so a new Gibbs sampler update does not have to be written for Z
+      # print("Z.mat = ")
+      # print(Z.mat)
+      Z.mat <- GibbsUpLatentGivenRankGroup(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu,
+                                           weight.vec = rep(1, n.ranker), n.ranker = n.ranker )
+
+      if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+
+    }else{
+      if(nrow(X.train)==n.item*n.ranker){
+        # print("Z.mat = ")
+        # print(Z.mat)
+        #
+        # print("n.ranker = ")
+        # print(n.ranker)
+        #
+        # print("n.item = ")
+        # print(n.item)
+        #
+        #
+        # print("iter = ")
+        # print(iter)
+
+        Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mu, weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
+                                                  n.item = n.item )
+        if(any(is.na(Z.mat))){stop("NA in Z.mat")}
+
+
+      }else{
+        #stop("nrow(X.train) not equal to n.item or n.ranker")
+      }
+    }
+
+
+    # mean.para.update = GibbsUpMuGivenLatentGroup(Z.mat = Z.mat, X.mat = Xmat.train,
+    #                                              weight.vec = rep(1, n.ranker),
+    #                                              sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+    #                                              n.ranker = n.ranker, n.item = n.item, p.cov = p.cov,
+    #                                              para.expan = para.expan)
+    if(item_sigbeta){
+
+      for(item in 1:n.item){
+
+        Xmat.train_temp <- Xmat.train[ (0:(n.ranker-1))*n.item +item  , ]
+
+        mean.para.update = GibbsUpMuGivenLatent_oneitemcoeff(Z.vec = as.vector(Z.mat[item,]), X.mat = Xmat.train_temp,
+                                                   weight.vec = rep(1, n.ranker),
+                                                   sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+                                                   n.ranker = n.ranker,
+                                                   n.item = n.item,
+                                                   p.cov = p.cov,
+                                                   para.expan = para.expan)
+
+
+        ### for check only
+        if(para.expan){
+          Z.mat = Z.mat/mean.para.update$theta
+        }
+        alpha[item] = mean.para.update$alpha
+        beta[ (item-1)*p.cov + (1:p.cov) ] = mean.para.update$beta
+
+        # print("ncol(Xmat.train) = ")
+        # print(ncol(Xmat.train))
+        # print("nrow(Xmat.train) = ")
+        # print(nrow(Xmat.train))
+        # print("n.ranker = ")
+        # print(n.ranker)
+        # print("n.item = ")
+        # print(n.item)
+        itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+        itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
+
+        # mu = as.vector( rep(alpha, n.ranker) + (itembinmat %x% Xmat.train) %*% beta )
+        # mu_test = as.vector( rep(alpha, num_test_rankers) + (itembinmat_test %x% Xmat.test) %*% beta )
+
+        #possibly more efficient
+        for(item in 1:n.item){
+          mu[ (0:(n.ranker-1))*n.item +item ] <- rep(alpha[item], n.ranker) + Xmat.train_temp %*% beta[ (item-1)*p.cov + (1:p.cov) ]
+          mu_test[ (0:(num_test_rankers-1))*n.item +item ] <- rep(alpha[item], num_test_rankers) + Xmat.test[ (0:(num_test_rankers-1))*n.item +item, ]  %*% beta[ (item-1)*p.cov + (1:p.cov) ]
+        }
+
+        # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+        # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+
+        # update hyper para sigma2.alpha and sigma2.beta
+        if(p.cov > 0){
+          # sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+          sigma2.beta.vec = GibbsUpsigma2(beta[ (item-1)*p.cov + (1:p.cov) ], nu.beta, tau2.beta)
+        }
+
+      }
+
+      sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+
+
+    }else{
+
+      mean.para.update = GibbsUpMuGivenLatentInd(Z.mat = Z.mat, X.mat = Xmat.train,
+                                                 weight.vec = rep(1, n.ranker),
+                                                 sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+                                                 n.ranker = n.ranker,
+                                                 n.item = n.item,
+                                                 p.cov = p.cov,
+                                                 para.expan = para.expan)
+
+
+      ### for check only
+      if(para.expan){
+        Z.mat = Z.mat/mean.para.update$theta
+      }
+      alpha = mean.para.update$alpha
+      beta = mean.para.update$beta
+
+      if(any(is.na(beta))){
+        print('item = ')
+        print(item)
+        print('iter = ')
+        print(iter)
+        print("Line 65808 beta = ")
+        print(beta)
+        stop("NA in beta")
+      }
+
+
+      # print("ncol(Xmat.train) = ")
+      # print(ncol(Xmat.train))
+      # print("nrow(Xmat.train) = ")
+      # print(nrow(Xmat.train))
+      # print("n.ranker = ")
+      # print(n.ranker)
+      # print("n.item = ")
+      # print(n.item)
+      itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+      itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
+
+      # Kronecker product does not work unless same covariates for each item
+      # mu = as.vector( rep(alpha, n.ranker) + (itembinmat %x% Xmat.train) %*% beta )
+      # mu_test = as.vector( rep(alpha, num_test_rankers) + (itembinmat_test %x% Xmat.test) %*% beta )
+
+      #possibly more efficient
+      for(item in 1:n.item){
+        mu[ (0:(n.ranker-1))*n.item +item ] <- rep(alpha[item], n.ranker) + Xmat.train[ (0:(n.ranker-1))*n.item +item  , ] %*% beta[ (item-1)*p.cov + (1:p.cov)]
+        mu_test[ (0:(num_test_rankers-1))*n.item +item ] <- rep(alpha[item], num_test_rankers) + Xmat.test[ (0:(num_test_rankers-1))*n.item + item, ] %*% beta[ (item-1)*p.cov + (1:p.cov)]
+      }
+
+      if(any(is.na(mu))){
+        print('item = ')
+        print(item)
+        print('iter = ')
+        print(iter)
+        print("Line 65825 mu = ")
+        print(mu)
+        stop("NA in mu")
+      }
+
+      # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+      # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+
+      # update hyper para sigma2.alpha and sigma2.beta
+      sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+      if(p.cov > 0){
+        sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+      }
+    }
+
+    # store value at this iteration
+    if(keep_zmat==TRUE){
+      draw$Z.mat[,,iter] = Z.mat
+    }
+    draw$alpha[,iter] = alpha
+    draw$beta[,iter] = beta
+    draw$mu[,iter] = mu
+    draw$mu_test[,iter] = mu_test
+    draw$sigma2.alpha[iter] = sigma2.alpha
+    draw$sigma2.beta[iter] = sigma2.beta
+    if(item_sigbeta){
+      draw$sigma2.beta.mat[,iter] <- sigma2.beta.vec
+    }
+    # print iteration number
+    if(iter %% print.opt == 0){
+      print(paste("Gibbs Iteration", iter))
+      # print(c(sigma2.alpha, sigma2.beta))
+    }
+
+  }
+  return(draw)
+}
 
 
 

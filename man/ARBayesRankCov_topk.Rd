@@ -18,7 +18,7 @@ ARBayesRankCov_topk(
   n.time,
   p.cov = ncol(X.train),
   iter.max = 5000,
-  para.expan = TRUE,
+  para.expan = FALSE,
   print.opt = 100,
   initial.list = NULL,
   n.trees = 50L,
