@@ -714,7 +714,8 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
                                               alpha_a_y = 0.5,
                                               alpha_b_y = 1,
                                               alpha_split_prior = TRUE,
-                                              topkinit = FALSE){
+                                              topkinit = FALSE,
+                                              max_z_resamples = 10){
 
 
   Num_lin_ess_samples <- 100
@@ -1153,8 +1154,15 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     max_resp_vec <- rep(NA, n.item)
 
     for(item in 1:n.item){
+      df_for_dbart_temp <- data.frame(y = as.vector(Z.mat[item, ]), x = Zlag.mat[(0:(n.time*n.ranker-1))*n.item + item, , drop = FALSE] )
+
+      length("as.vector(Z.mat[item, ]) = ")
+      length(as.vector(Z.mat[item, ]))
+      length("n.time*n.ranker = ")
+      length(n.time*n.ranker)
+
       sampler <- dbarts(y ~ .,
-                        data = df_for_dbart,
+                        data = df_for_dbart_temp, #df_for_dbart[(0:(n.time*n.ranker-1))*n.item + item, ],
                         #test = Xmat.test,
                         control = control,
                         resid.prior = fixed(1),
@@ -1171,6 +1179,9 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       max_resp_vec[item] <- max(as.vector(Z.mat[item, ]))
 
       samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+
+      # print("line 1182, item - ")
+      # print(item)
       # sampler$setSigma(sigma = 1)
 
       #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
@@ -1264,9 +1275,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
   # draw$sigma2.alpha[1] = sigma2.alpha
   # draw$sigma2.beta[1] = sigma2.beta
 
-
-  # print("Line 954")
-
+  # print("Line 1278")
 
   df_for_dbart_test <- data.frame( x = Zlag.mat.test )
 
@@ -1277,7 +1286,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
     # mupreds <- sampler$predict(Xmat.train)
 
-    temp_test_mat <- data.frame(x = as.matrix(df_for_dbart_test[1:(n.item*n.ranker) ,]) ) #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+    temp_test_mat <- data.frame(x = as.matrix(df_for_dbart_test[1:(n.item*n.ranker) ,, drop = FALSE]) ) #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
     colnames(temp_test_mat) <- colnames(df_for_dbart_test)
 
     temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
@@ -1289,13 +1298,13 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     for(t1 in 1:num_test_periods){
       #produce a prediction
 
-      # print("colnames(temp_test_mat) = ")
-      # print(colnames(temp_test_mat))
-
       # testpredvec <- sampler$predict(temp_test_mat)
+
       testpredvec <- rep(NA, nrow(temp_test_mat))
       for(item in 1:n.item){
-        testpredvec[(0:(n.ranker-1))*n.item + item] <- samplerlist[[item]]$predict(temp_test_mat[(0:(n.ranker-1))*n.item + item, ])
+        temp_test_mat2 <- temp_test_mat[(0:(n.ranker-1))*n.item + item, , drop = FALSE ]
+        colnames(temp_test_mat2) <- colnames(df_for_dbart_test)
+        testpredvec[(0:(n.ranker-1))*n.item + item] <- samplerlist[[item]]$predict(temp_test_mat2)
       }
       #fill in temp_test_preds with noise
       if(noise_in_pred==1){
@@ -1308,11 +1317,11 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       #need to rewrite this if want to allow for no observed covariates
       if(num_lags ==1){
         temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] ,
-                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker), ] )))
+                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker), , drop = FALSE] )))
 
       }else{
         temp_test_mat <-  data.frame(x =  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
-                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),] )))
+                                                  as.matrix(df_for_dbart_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker),, drop = FALSE] )))
 
       }
       colnames(temp_test_mat) <- colnames(df_for_dbart_test)
@@ -1373,7 +1382,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     draw$mu_test[,1] <- initial.list$mu_test
   }
 
-
+  # print("begin Gibbs sampler")
 
   #//////////////////////////////////////////////////////////////////////////
   #//////////////////////////////////////////////////////////////////////////
@@ -1412,8 +1421,11 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     # create intersection matrices
 
 
-    intersectmat_tmin1 <- NA
-    list_item_intersectmats_tmin1 <- NA
+    # intersectmat_tmin1 <- NA
+    # list_item_intersectmats_tmin1 <- NA
+
+    list_item_intersectmats <- list()
+    num_regions_vec <- rep(NA, n.item)
 
     # create vector of indices for ranker indiv in time period 1
 
@@ -1425,58 +1437,43 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
 
+    for(item_ind in 1:n.item){
+        list_inter_mats <- list()
 
-    list_inter_mats <- list()
+        for(i in 1:n.trees){
+          treeexample1 <- samplerlist[[item_ind]]$getTrees(treeNums = i,
+                                           chainNums = 1,
+                                           sampleNums = 1)
 
-    for(i in 1:n.trees){
+          # rebuilt_tree <- rebuildTree2(treeexample1)
+          rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-
-      treeexample1 <- sampler$getTrees(treeNums = i,
-                                       chainNums = 1,
-                                       sampleNums = 1)
-
-      # rebuilt_tree <- rebuildTree2(treeexample1)
-      rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
-      #must use covariates for individual indiv at time period t
-
-      # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, as.matrix(df_for_dbart$x[obs_indices[1]]) )
-
-      # list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree$var == -1 , 5:7]
-      list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree[,4] == -1 , 5:7, drop = FALSE]
-
-
+          #must use covariates for individual indiv at time period t
+          # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, as.matrix(df_for_dbart$x[obs_indices[1]]) )
+          # list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree$var == -1 , 5:7]
+          list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree[,4] == -1 , 5:7, drop = FALSE]
+        }
+        intersectmat <- interNtreesB(list_inter_mats)
+        # print("Line 1146")
+        intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
+        # print("Line 1150")
+        # calculate one dimensional integrals
+        for(rowind in 1:nrow(intersectmat)){
+          # ktemp <- nkt_mat[rowind,k_index]
+          # tempmean <- intersectmat[ktemp,1]
+          templower <- intersectmat[rowind,2]
+          tempupper <- intersectmat[rowind,3]
+          # ASSUMING PRIOR MEAN ALL ZEROS
+          # These are the q0 integrals
+          intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
+          # tempintegralval <- tempintegralval*onedim_int
+        }
+        # intersectmat_tmin1 <- intersectmat
+        num_regions_vec[item_ind] <- nrow(intersectmat)
+        list_item_intersectmats[[item_ind]] <- intersectmat
     }
 
-    intersectmat <- interNtreesB(list_inter_mats)
-
-    # print("Line 1146")
-
-    intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
-
-    # print("Line 1150")
-
-
-    # calculate one dimensional integrals
-    for(rowind in 1:nrow(intersectmat)){
-      # ktemp <- nkt_mat[rowind,k_index]
-      # tempmean <- intersectmat[ktemp,1]
-      templower <- intersectmat[rowind,2]
-      tempupper <- intersectmat[rowind,3]
-
-      # ASSUMING PRIOR MEAN ALL ZEROS
-
-      # These are the q0 integrals
-      intersectmat[rowind, 4] <- pnorm(tempupper, mean = 0, sd = 1) - pnorm(templower, mean = 0, sd = 1)
-      # tempintegralval <- tempintegralval*onedim_int
-    }
-
-    intersectmat_tmin1 <- intersectmat
-
-
-
-    num_regions <- nrow(intersectmat)
+    # num_regions <- nrow(intersectmat)
 
     # print("Line 1169")
 
@@ -1513,18 +1510,18 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           # let rows be period zero, and columns be period 1 (2?)
 
           # probmattemp <- matrix(0,
-          #                       nrow = num_regions,
-          #                       ncol = num_regions)
+          #                       nrow = num_regions_vec[item_ind],
+          #                       ncol = num_regions_vec[item_ind])
 
           logprobmattemp <- matrix(0,
-                                   nrow = num_regions,
-                                   ncol = num_regions)
+                                   nrow = num_regions_vec[item_ind],
+                                   ncol = num_regions_vec[item_ind])
 
           # loop over period 2 regions into which z_1 can fall
 
 
           tempbounds <- matrix(NA,
-                               nrow = num_regions,
+                               nrow = num_regions_vec[item_ind],
                                ncol = 2)
 
           # Trunc norm prob of next periods latent value conditional on region
@@ -1652,33 +1649,33 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
 
 
-          tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+          tempmeanfordens <- (list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 1] + 0.5)*(max_resp_vec[item_ind] - min_resp_vec[item_ind]) + min_resp_vec[item_ind]
 
-          bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
+          bad_regions <- which((list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 2] >= temp_upper3) | (temp_lower3 >= list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 3]))
 
-          logprobmattemp[, bad_regions] <- -Inf #rep(-Inf,num_regions)
+          logprobmattemp[, bad_regions] <- -Inf #rep(-Inf,num_regions_vec[item_ind])
           tempbounds[bad_regions, 1] <- NA
           tempbounds[bad_regions, 2] <- NA
 
-          good_regions <- setdiff(1:num_regions, bad_regions)
+          good_regions <- setdiff(1:num_regions_vec[item_ind], bad_regions)
 
 
-          temp_tnorm_logprobvec <- rep(NA, num_regions)
+          temp_tnorm_logprobvec <- rep(NA, num_regions_vec[item_ind])
           temp_tnorm_logprobvec[good_regions] <- fastlognormdens(temp_ztp1,
                                                                  mean = tempmeanfordens[good_regions],
                                                                  sd = 1)
 
 
-          # logprobmattemp[1:num_regions, k_ind] <- temp_tnorm_logprobvec[k_ind] +
-          #   log(intersectmat[1:num_regions,4])
+          # logprobmattemp[1:num_regions_vec[item_ind], k_ind] <- temp_tnorm_logprobvec[k_ind] +
+          #   log(list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind],4])
 
-          logprobmattemp[1:num_regions, good_regions] <- outer(log(intersectmat[1:num_regions,4]),
+          logprobmattemp[1:num_regions_vec[item_ind], good_regions] <- outer(log(list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind],4]),
                                                                temp_tnorm_logprobvec[good_regions],
                                                                FUN = "+")
 
 
-          tempbounds[good_regions,1] <- pmax(intersectmat[good_regions, 2], temp_lower3)
-          tempbounds[good_regions,2] <- pmin(intersectmat[good_regions, 3], temp_upper3)
+          tempbounds[good_regions,1] <- pmax(list_item_intersectmats[[item_ind]][good_regions, 2], temp_lower3)
+          tempbounds[good_regions,2] <- pmin(list_item_intersectmats[[item_ind]][good_regions, 3], temp_upper3)
 
           if(any(tempbounds[good_regions,1] >= tempbounds[good_regions,2])){
             stop(" line 1868 bounds badly defined")
@@ -1691,12 +1688,12 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
 
           # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
-          #                                 mean = intersectmat[1:num_regions, 1],
+          #                                 mean = list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 1],
           #                                 sd = 1)
 
-          # for(k_ind in 1:num_regions){
+          # for(k_ind in 1:num_regions_vec[item_ind]){
           #   # obtain mean for truncated normal distribution
-          #   # temp_mean <- intersectmat[k_ind, 1]
+          #   # temp_mean <- list_item_intersectmats[[item_ind]][k_ind, 1]
           #
           #   # want trunc norm probability of latent variable value for item_ind
           #   # in period t+1
@@ -1714,15 +1711,15 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #
           #   temp_tnorm_prob <- temp_tnorm_probvec[k_ind]
           #
-          #   # temp_mean <- intersectmat[k_ind, 1]
+          #   # temp_mean <- list_item_intersectmats[[item_ind]][k_ind, 1]
           #
           #
           #
           #   # now second term
           #
           #
-          #   temp_lower2 <- intersectmat[k_ind, 2]
-          #   temp_upper2 <- intersectmat[k_ind, 3]
+          #   temp_lower2 <- list_item_intersectmats[[item_ind]][k_ind, 2]
+          #   temp_upper2 <- list_item_intersectmats[[item_ind]][k_ind, 3]
           #
           #
           #
@@ -1756,7 +1753,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #
           #
           #     # these three lines are technically unnecessary
-          #     probmattemp[, k_ind] <- rep(0,num_regions)
+          #     probmattemp[, k_ind] <- rep(0,num_regions_vec[item_ind])
           #     tempbounds[k_ind, 1] <- NA
           #     tempbounds[k_ind, 2] <- NA
           #
@@ -1788,10 +1785,10 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #   }
           #
           #
-          #   for(k0_ind in 1:num_regions){
+          #   for(k0_ind in 1:num_regions_vec[item_ind]){
           #
           #     #loop over all possible means
-          #     temp_mean2 <- intersectmat[k0_ind,1]
+          #     temp_mean2 <- list_item_intersectmats[[item_ind]][k0_ind,1]
           #
           #     # probability of being in intersection region
           #
@@ -1800,9 +1797,9 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #
           #     # probmattemp[k0_ind, k_ind] <- prob_t_region*
           #     #   temp_tnorm_prob *
-          #     #   intersectmat[k0_ind,4]
+          #     #   list_item_intersectmats[[item_ind]][k0_ind,4]
           #
-          #     probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * intersectmat[k0_ind,4]
+          #     probmattemp[k0_ind, k_ind] <- temp_tnorm_prob * list_item_intersectmats[[item_ind]][k0_ind,4]
           #
           #     if(probmattemp[k0_ind, k_ind] <0){
           #       print("probmattemp[k0_ind, k_ind] = ")
@@ -1814,8 +1811,8 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #       print("temp_tnorm_prob = ")
           #       print(temp_tnorm_prob)
           #
-          #       print("intersectmat[k0_ind,4] = ")
-          #       print(intersectmat[k0_ind,4])
+          #       print("list_item_intersectmats[[item_ind]][k0_ind,4] = ")
+          #       print(list_item_intersectmats[[item_ind]][k0_ind,4])
           #
           #       print("temp_upper2 = ")
           #       print(temp_upper2)
@@ -1832,7 +1829,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           #
           #   } # end loop over k0
           #
-          #   # save upper and lower bounds (mean saved in intersectmat)
+          #   # save upper and lower bounds (mean saved in list_item_intersectmats[[item_ind]])
           #   # or just obtain again later
           #
           #   tempbounds[k_ind,1] <- temp_lower2
@@ -1849,7 +1846,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
           # print("Line 1621 before sample")
 
-          # region_ind <- sample.int((num_regions^2),
+          # region_ind <- sample.int((num_regions_vec[item_ind]^2),
           #                          size = 1,
           #                          replace = TRUE,
           #                          prob = as.vector(probmattemp))
@@ -1859,7 +1856,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
           probstemp <- exp(logprobstemp - logsumexps)
 
-          region_ind <- sample.int((num_regions^2),
+          region_ind <- sample.int((num_regions_vec[item_ind]^2),
                                    size = 1,
                                    replace = TRUE,
                                    prob = probstemp)
@@ -1868,14 +1865,14 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           # print("Line 1629 after sample")
 
           # k0 region is sampled number modulo number of regions
-          k0_region_ind <- (region_ind - 1) %% num_regions + 1
+          k0_region_ind <- (region_ind - 1) %% num_regions_vec[item_ind] + 1
           # if(k0_region_ind ==0){
-          #   k0_region_ind <- num_regions
+          #   k0_region_ind <- num_regions_vec[item_ind]
           # }
 
           # k1 region is the ceiling of sampled number divided by number of regions
-          # k1_region_ind <- ceiling(region_ind/num_regions)
-          k1_region_ind <- (region_ind - 1) %/% num_regions + 1
+          # k1_region_ind <- ceiling(region_ind/num_regions_vec[item_ind])
+          k1_region_ind <- (region_ind - 1) %/% num_regions_vec[item_ind] + 1
 
 
           # print("k1_region_ind = ")
@@ -1884,8 +1881,8 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           temp_lower2 <- tempbounds[k1_region_ind,1]
           temp_upper2 <- tempbounds[k1_region_ind,2]
 
-          # print("num_regions = ")
-          # print(num_regions)
+          # print("num_regions_vec[item_ind] = ")
+          # print(num_regions_vec[item_ind])
           #
           # print("region_ind = ")
           # print(region_ind)
@@ -1893,8 +1890,8 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           # print("k0_region_ind = ")
           # print(k0_region_ind)
 
-          temp_mean0 <- intersectmat[k0_region_ind, 1]
-          temp_mean0 <- (temp_mean0 + 0.5)*(max_resp - min_resp) + min_resp
+          temp_mean0 <- list_item_intersectmats[[item_ind]][k0_region_ind, 1]
+          temp_mean0 <- (temp_mean0 + 0.5)*(max_resp_vec[item_ind] - min_resp_vec[item_ind]) + min_resp_vec[item_ind]
 
           # print("temp_mean0 = ")
           # print(temp_mean0)
@@ -1933,9 +1930,9 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
             # must find last lower bound that temp_ztpmin1 is greater than
             # or first upper bound that temp_ztpmin1 is below
-            ktemp_tmin1 <- which((temp_ztpmin1 < intersectmat[, 3]) )[1]
+            ktemp_tmin1 <- which((temp_ztpmin1 < list_item_intersectmats[[item_ind]][, 3]) )[1]
             # Then obtain the corresponding region mean value
-            temp_mean2 <- intersectmat[ktemp_tmin1,1]
+            temp_mean2 <- list_item_intersectmats[[item_ind]][ktemp_tmin1,1]
 
             # print("temp_mean2 = ")
             # print(temp_mean2)
@@ -1959,12 +1956,12 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
             # second column is the lower bounds
             # third column is the upper bounds
             # temp_region_probs <- matrix(0,
-            #                             nrow = nrow(intersectmat),
+            #                             nrow = nrow(list_item_intersectmats[[item_ind]]),
             #                             ncol = 3)
 
 
             temp_region_logprobs <- matrix(-Inf,
-                                           nrow = nrow(intersectmat),
+                                           nrow = nrow(list_item_intersectmats[[item_ind]]),
                                            ncol = 3)
 
 
@@ -2102,37 +2099,37 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
             #                                     aboverank_ind]
             # }
 
-            tempmeanfordens <- (intersectmat[1:num_regions, 1] + 0.5)*(max_resp - min_resp) + min_resp
+            tempmeanfordens <- (list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 1] + 0.5)*(max_resp_vec[item_ind] - min_resp_vec[item_ind]) + min_resp_vec[item_ind]
 
             # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
             #                                    mean = tempmeanfordens,
             #                                    sd = 1)
 
             # temp_tnorm_probvec <- fastnormdens(temp_ztp1,
-            #                                 mean = intersectmat[1:num_regions, 1],
+            #                                 mean = list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 1],
             #                                 sd = 1)
-            bad_regions <- which((intersectmat[1:num_regions, 2] >= temp_upper3) | (temp_lower3 >= intersectmat[1:num_regions, 3]))
+            bad_regions <- which((list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 2] >= temp_upper3) | (temp_lower3 >= list_item_intersectmats[[item_ind]][1:num_regions_vec[item_ind], 3]))
 
             temp_region_logprobs[bad_regions, 1] <- -Inf
             temp_region_logprobs[bad_regions, 2] <- NA
             temp_region_logprobs[bad_regions, 3] <- NA
 
-            good_regions <- setdiff(1:num_regions, bad_regions)
+            good_regions <- setdiff(1:num_regions_vec[item_ind], bad_regions)
 
-            temp_tnorm_logprobvec <- rep(NA, num_regions)
+            temp_tnorm_logprobvec <- rep(NA, num_regions_vec[item_ind])
             temp_tnorm_logprobvec[good_regions] <- fastlognormdens(temp_ztp1,
                                                                    mean = tempmeanfordens[good_regions],
                                                                    sd = 1)
 
 
             temp_region_logprobs[good_regions, 1] <- temp_tnorm_logprobvec[good_regions]
-            temp_region_logprobs[good_regions, 2] <- pmax(intersectmat[good_regions, 2], temp_lower3)
-            temp_region_logprobs[good_regions, 3] <- pmin(intersectmat[good_regions, 3], temp_upper3)
+            temp_region_logprobs[good_regions, 2] <- pmax(list_item_intersectmats[[item_ind]][good_regions, 2], temp_lower3)
+            temp_region_logprobs[good_regions, 3] <- pmin(list_item_intersectmats[[item_ind]][good_regions, 3], temp_upper3)
 
 
-            # for(k_ind in 1:num_regions){
+            # for(k_ind in 1:num_regions_vec[item_ind]){
             #   # obtain mean for truncated normal distribution
-            #   # temp_mean <- intersectmat[k_ind, 1]
+            #   # temp_mean <- list_item_intersectmats[[item_ind]][k_ind, 1]
             #
             #   # temp_tnorm_prob <- dtruncnorm(temp_ztp1,
             #   #                               a=temp_lower,
@@ -2156,8 +2153,8 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
             #   # tildeC_ktminl corresponds to
             #   # period t+1 k_ind region intereval
             #
-            #   temp_lower2 <- intersectmat[k_ind, 2]
-            #   temp_upper2 <- intersectmat[k_ind, 3]
+            #   temp_lower2 <- list_item_intersectmats[[item_ind]][k_ind, 2]
+            #   temp_upper2 <- list_item_intersectmats[[item_ind]][k_ind, 3]
             #
             #
             #
@@ -2271,7 +2268,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
             # print("Line 1903 before sample")
 
-            # region_ind <- sample.int(num_regions, 1, replace = TRUE, prob = temp_region_probs[,1])
+            # region_ind <- sample.int(num_regions_vec[item_ind], 1, replace = TRUE, prob = temp_region_probs[,1])
 
             if(length(good_regions)==1){
               region_ind <- good_regions[1]
@@ -2281,10 +2278,10 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
               logsumexps <- max_ll + log(sum(exp( logprobstemp  -  max_ll )))
               probstemp <- exp(logprobstemp - logsumexps)
 
-              region_ind <- sample(x = (1:num_regions)[good_regions], size = 1, replace = TRUE, prob = probstemp)
+              region_ind <- sample(x = (1:num_regions_vec[item_ind])[good_regions], size = 1, replace = TRUE, prob = probstemp)
             }
 
-            temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+            temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp_vec[item_ind] - min_resp_vec[item_ind]) + min_resp_vec[item_ind]
 
             # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
             #
@@ -2361,9 +2358,9 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
           # must find last lower bound that temp_ztpmin1 is greater than
           # for first upper bound that temp_ztpmin1 is below
-          ktemp_tmin1 <- which(temp_ztpmin1 < intersectmat[, 3])[1]
+          ktemp_tmin1 <- which(temp_ztpmin1 < list_item_intersectmats[[item_ind]][, 3])[1]
           # Then obtain the corresponding region mean value
-          temp_mean2 <- intersectmat[ktemp_tmin1,1]
+          temp_mean2 <- list_item_intersectmats[[item_ind]][ktemp_tmin1,1]
 
           # now find interval
 
@@ -2425,7 +2422,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           # }
 
 
-          temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
+          temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp_vec[item_ind] - min_resp_vec[item_ind]) + min_resp_vec[item_ind]
 
           # temp_mean2_debug <- sampler$predict(x.test = as.matrix(rep(temp_ztpmin1,100)), offset.test = NULL)[1]
           #
@@ -2756,76 +2753,77 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     #     }
     # } else{
 
-    temp_break <- 0
-    for(j in 1:num_lags){
-      # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
+    for(item_ind in 1:n.item){
+      temp_break <- 0
+      for(j in 1:num_lags){
+        # sampler$setPredictor(x = Zlag.mat[,j], column = j, forceUpdate = TRUE)
 
-      while (sampler$setPredictor(x = Zlag.mat[,j], column = j) == FALSE) {
+        while (samplerlist[[item]]$setPredictor(x = Zlag.mat[(0:(n.ranker*n.time-1))*n.item + item_ind,j], column = j) == FALSE) {
+          if(seq_z_draws==1){
+            stop("updates still not consistent with tree structure")
+          }
+          print("new z values not consistent with tree structure, must draw again")
 
-        if(seq_z_draws==1){
-          stop("updates still not consistent with tree structure")
+          # If this error message occurs
+          # Check the conditions in the dbart package for setPredictor == FALSE
+          # And if this is hypothetically possible, even with draws from the smoothing distribution,
+          # and if it is not a bug
+          # then need to go back to beginning of this iteration of the Gibbs sampler
+          # and sample Zmat again
+
+
+          temp_break <- 1
+          break
+          # stop("new z values not consistent with tree structure, must draw again")
+
+
+          # #perhaps this can be rewritten to just re-draw the relevant column?
+          # Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
+          #                                           Z.mat = Z.mat,
+          #                                           mu = mu,
+          #                                           weight.vec = rep(1, n.ranker*n.time),
+          #                                           n.ranker = n.ranker*n.time,
+          #                                           n.item = n.item )
+          #
+          # Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
+          #
+          # for(t in 1:num_lags){
+          #   init_Z_t0 <- rep(0, t*n.item*n.ranker)
+          #   # init_Z_t0 <- rnorm(t*n.item*n.ranker)
+          #
+          #   Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
+          #
+          # }
+          #
+          # #check that Zmat and  Zlag.mat are updated outside the while loop and for-loop over j
+
         }
-        print("new z values not consistent with tree structure, must draw again")
 
-        # If this error message occurs
-        # Check the conditions in the dbart package for setPredictor == FALSE
-        # And if this is hypothetically possible, even with draws from the smoothing distribution,
-        # and if it is not a bug
-        # then need to go back to beginning of this iteration of the Gibbs sampler
-        # and sample Zmat again
-
-
-        temp_break <- 1
-        break
-        # stop("new z values not consistent with tree structure, must draw again")
-
-
-        # #perhaps this can be rewritten to just re-draw the relevant column?
-        # Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten,
-        #                                           Z.mat = Z.mat,
-        #                                           mu = mu,
-        #                                           weight.vec = rep(1, n.ranker*n.time),
-        #                                           n.ranker = n.ranker*n.time,
-        #                                           n.item = n.item )
-        #
-        # Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
-        #
-        # for(t in 1:num_lags){
-        #   init_Z_t0 <- rep(0, t*n.item*n.ranker)
-        #   # init_Z_t0 <- rnorm(t*n.item*n.ranker)
-        #
-        #   Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
-        #
-        # }
-        #
-        # #check that Zmat and  Zlag.mat are updated outside the while loop and for-loop over j
-
+        if(temp_break==1){
+          break
+        }
       }
-
       if(temp_break==1){
         break
       }
+
+
     }
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
-
         for(t in 1:num_lags){
           init_Z_t0 <- rep(0, t*n.item*n.ranker)
           # init_Z_t0 <- rnorm(t*n.item*n.ranker)
-
           Zlag.mat[,t] <- c(init_Z_t0, as.vector(Z.mat)[1:((n.time-t)*n.item*n.ranker)])
-
         }
-
       }else{
         breakcount <- breakcount +1
         next
       }
-
     }
 
     breakcount <- 0
@@ -2882,58 +2880,111 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     ##################### Sample sum-of-trees ##################################################
 
 
-    #set the response.
-    #Check that 0 is a reasonable initial value
-    #perhaps makes more sense to use initial values of Z
-    sampler$setResponse(y = as.vector(Z.mat))
-    # sampler$setSigma(sigma = 1)
-    #sampler$setPredictor(x= df_for_dbart$x, column = 1, forceUpdate = TRUE)
+    #### tree samples item loop ###########
+    for(item in 1:n.item){
+      #set the response.
+      #Check that 0 is a reasonable initial value
+      #perhaps makes more sense to use initial values of Z
 
-    min_resp <- min(as.vector(Z.mat))
-    max_resp <- max(as.vector(Z.mat))
+      samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
 
-    if(sparse){
-      tempmodel <- sampler$model
-      tempmodel@tree.prior@splitProbabilities <- s_y
-      sampler$setModel(newModel = tempmodel)
+      min_resp_vec[item] <- min(as.vector(Z.mat[item, ]))
+      max_resp_vec[item] <- max(as.vector(Z.mat[item, ]))
+      #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
+      if(sparse){
+        tempmodel <- samplerlist[[item]]$model
+        tempmodel@tree.prior@splitProbabilities <- s_y_list[[item]]
+        samplerlist[[item]]$setModel(newModel = tempmodel)
+      }
+
+      #mu = as.vector( alpha + X.mat %*% beta )
+      samplestemp <- samplerlist[[item]]$run()
+      samplestemp_list[[item]] <- samplestemp
+      mutempitem <- samplestemp$train[,1]
+      mutemp[(0:(n.ranker*n.time-1))*n.item + item] <- mutempitem
+
+      #suppose there are a number of samples
+      # print("sigma = ")
+      # print(samplestemp$sigma)
+
+      # mupreds <- samplerlist[[item]]$predict(Xmat.train)
+
+      if(sparse){
+        tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
+        tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y[tempcounts$x] <- tempcounts$N
+        varcount_list[[item]] <- var_count_y
+      }
+
+      if (sparse & (iter > floor(n.burnin * 0.5))) {
+        # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+        # s_z <- s_update_z[[1]]
+
+        s_update_y <- update_s(var_count_y, p_y, alpha_s_y_list[[item]])
+        s_y <- s_update_y[[1]]
+        s_y_list[[item]] <- s_y
+        if(alpha_split_prior){
+          # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+          alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+          alpha_s_y_list[[item]] <- alpha_s_y
+        }
+      }
     }
-    #mu = as.vector( alpha + X.mat %*% beta )
-    samplestemp <- sampler$run()
-
-    mutemp <- samplestemp$train[,1]
-    #suppose there are a number of samples
-    if(sparse){
-      tempcounts <- fcount(sampler$getTrees()$var)
-      tempcounts <- tempcounts[tempcounts$x != -1, ]
-      var_count_y[tempcounts$x] <- tempcounts$N
-    }
-    # mutemp <- sampler$predict(df_for_dbart)
-    # print("sigma = ")
-    # print(samplestemp$sigma)
 
     mu = mutemp
 
 
-    if (sparse & (iter > floor(n.burnin * 0.5))) {
-      # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
-      # s_z <- s_update_z[[1]]
 
-      s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
-      s_y <- s_update_y[[1]]
-
-      if(alpha_split_prior){
-        # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
-        alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
-      }
-    }
+    # #set the response.
+    # #Check that 0 is a reasonable initial value
+    # #perhaps makes more sense to use initial values of Z
+    # sampler$setResponse(y = as.vector(Z.mat))
+    # # sampler$setSigma(sigma = 1)
+    # #sampler$setPredictor(x= df_for_dbart$x, column = 1, forceUpdate = TRUE)
+    #
+    # min_resp <- min(as.vector(Z.mat))
+    # max_resp <- max(as.vector(Z.mat))
+    #
+    # if(sparse){
+    #   tempmodel <- sampler$model
+    #   tempmodel@tree.prior@splitProbabilities <- s_y
+    #   sampler$setModel(newModel = tempmodel)
+    # }
+    # #mu = as.vector( alpha + X.mat %*% beta )
+    # samplestemp <- sampler$run()
+    #
+    # mutemp <- samplestemp$train[,1]
+    # #suppose there are a number of samples
+    # if(sparse){
+    #   tempcounts <- fcount(sampler$getTrees()$var)
+    #   tempcounts <- tempcounts[tempcounts$x != -1, ]
+    #   var_count_y[tempcounts$x] <- tempcounts$N
+    # }
+    # # mutemp <- sampler$predict(df_for_dbart)
+    # # print("sigma = ")
+    # # print(samplestemp$sigma)
+    #
+    # mu = mutemp
+    #
+    #
+    # if (sparse & (iter > floor(n.burnin * 0.5))) {
+    #   # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
+    #   # s_z <- s_update_z[[1]]
+    #
+    #   s_update_y <- update_s(var_count_y, p_y, alpha_s_y)
+    #   s_y <- s_update_y[[1]]
+    #
+    #   if(alpha_split_prior){
+    #     # alpha_s_z <- update_alpha(s_z, alpha_scale_z, alpha_a_z, alpha_b_z, p_z, s_update_z[[2]])
+    #     alpha_s_y <- update_alpha(s_y, alpha_scale_y, alpha_a_y, alpha_b_y, p_y, s_update_y[[2]])
+    #   }
+    # }
     ##################### Store iteration output ##################################################
-
 
     # store value at this iteration
     if(keep_zmat==TRUE){
       draw$Z.mat[,,iter] = Z.mat
       draw$Z.mat.test[,,iter] = Z.mat.test
-
     }
     # draw$alpha[,iter] = alpha
     # draw$beta[,iter] = beta
@@ -2995,8 +3046,11 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       # must use original column names to prevent an error in the predict function
       colnames(temp_test_mat) <- colnames(df_for_dbart_test)
 
-      testpredvec <- sampler$predict(temp_test_mat)
-
+      # testpredvec <- sampler$predict(temp_test_mat)
+      testpredvec <- rep(NA, nrow(temp_test_mat))
+      for(item in 1:n.item){
+        testpredvec[(0:(n.ranker-1))*n.item + item] <- samplerlist[[item]]$predict(temp_test_mat[(0:(n.ranker-1))*n.item + item, , drop = FALSE])
+      }
       #fill in temp_test_preds with noise
       if(noise_in_pred ==1){
         temp_test_preds[ , t1] <- testpredvec + rnorm( n.item*n.ranker )
@@ -3099,14 +3153,26 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     }
 
 
+    # if(sparse){
+    #   draw$alpha_s_y_store[iter] <- alpha_s_y
+    #   # draw$alpha_s_z_store[iter] <- alpha_s_z
+    #   draw$var_count_y_store[iter,] <- var_count_y
+    #   # draw$var_count_z_store[iter,] <- var_count_z
+    #   draw$s_prob_y_store[iter,] <- s_y
+    #   # draw$s_prob_z_store[iter,] <- s_z
+    # }
+
     if(sparse){
-      draw$alpha_s_y_store[iter] <- alpha_s_y
-      # draw$alpha_s_z_store[iter] <- alpha_s_z
-      draw$var_count_y_store[iter,] <- var_count_y
-      # draw$var_count_z_store[iter,] <- var_count_z
-      draw$s_prob_y_store[iter,] <- s_y
-      # draw$s_prob_z_store[iter,] <- s_z
+      for(item in 1:n.item){
+        draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
+        # draw$alpha_s_z_store[iter] <- alpha_s_z
+        draw$var_count_y_store[, iter, item] <- varcount_list[[item]]
+        # draw$var_count_z_store[iter,] <- var_count_z
+        draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
+        # draw$s_prob_z_store[iter,] <- s_z
+      }
     }
+
 
     # draw$mu_test[,1] <- samplestemp$test[,1]
 
@@ -3238,7 +3304,8 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
                                                 alpha_a_y = 0.5,
                                                 alpha_b_y = 1,
                                                 alpha_split_prior = TRUE,
-                                                topkinit = FALSE){
+                                                topkinit = FALSE,
+                                                max_z_resamples = 10){
 
 
   Num_lin_ess_samples <- 100
@@ -4106,8 +4173,8 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
           list_inter_mats <- list()
           for(i in 1:n.trees){
             treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
+                                                               chainNums = 1,
+                                                               sampleNums = 1)
             # rebuilt_tree <- rebuildTree2(treeexample1)
             rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
             #must use covariates for individual indiv at time period t
@@ -5521,7 +5588,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -6109,7 +6176,8 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
                                       alpha_split_prior = TRUE,
-                                      topkinit = FALSE){
+                                      topkinit = FALSE,
+                                      max_z_resamples = 10){
 
 
   Num_lin_ess_samples <- 100
@@ -8258,7 +8326,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -11240,7 +11308,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -34445,7 +34513,8 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
                                       sparse = TRUE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
-                                      alpha_split_prior = TRUE){
+                                      alpha_split_prior = TRUE,
+                                      max_z_resamples = 10){
 
 
   Num_lin_ess_samples <- 100
@@ -36420,7 +36489,7 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -40545,7 +40614,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
                                         sparse = TRUE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
-                                        alpha_split_prior = TRUE){
+                                        alpha_split_prior = TRUE,
+                                        max_z_resamples = 10){
 
 
   Num_lin_ess_samples <- 100
@@ -42956,7 +43026,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
     # if need to draw z values again, go back to start of loop
     if(temp_break==1){
-      if(breakcount == 10){
+      if(breakcount == max_z_resamples){
         Z.mat <- Z.matold
         Zlag.mat <- matrix(NA, nrow = n.time*n.ranker*n.item, ncol = num_lags)
 
@@ -71139,8 +71209,7 @@ if(any(is.na(mu))){
         mean.para.update = GibbsUpMuGivenLatent_oneitemcoeff(Z.vec = as.vector(Z.mat[item,]), X.mat = Xmat.train_temp,
                                                    weight.vec = rep(1, n.ranker),
                                                    sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
-                                                   n.ranker = n.ranker,
-                                                   n.item = n.item,
+                                                   n.ranker = n.ranker,# n.item = n.item,
                                                    p.cov = p.cov,
                                                    para.expan = para.expan)
 

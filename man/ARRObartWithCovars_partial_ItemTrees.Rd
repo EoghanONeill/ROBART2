@@ -46,7 +46,8 @@ ARRObartWithCovars_partial_ItemTrees(
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE,
-  topkinit = FALSE
+  topkinit = FALSE,
+  max_z_resamples = 10
 )
 }
 \arguments{
