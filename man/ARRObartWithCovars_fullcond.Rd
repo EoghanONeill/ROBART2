@@ -39,7 +39,7 @@ ARRObartWithCovars_fullcond(
   smoothing_method = "AR",
   num_horizon = 1,
   num_z_iters = 10,
-  itemcovars = FALSE,
+  itemcovars = TRUE,
   tree_power = 2,
   tree_base = 0.95,
   n.burnin = 0,

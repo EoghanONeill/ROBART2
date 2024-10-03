@@ -35,7 +35,7 @@ ARRObartWithCovars(
   keep_zmat = FALSE,
   noise_in_pred = 0,
   seq_z_draws = 1,
-  itemcovars = FALSE,
+  itemcovars = TRUE,
   N_hdr = 10000,
   rho_hdr = 0.5,
   smoothing_method = "AR",

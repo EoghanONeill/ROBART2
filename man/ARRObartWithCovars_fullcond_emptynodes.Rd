@@ -40,7 +40,7 @@ ARRObartWithCovars_fullcond_emptynodes(
   smoothing_method = "AR",
   num_horizon = 1,
   num_z_iters = 10,
-  itemcovars = FALSE,
+  itemcovars = TRUE,
   node_min_size = 5,
   k = 2,
   sigquant = 0.9,
