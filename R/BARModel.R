@@ -1437,6 +1437,21 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     # obs_indices[1] could jsut be replaced by [1] below\
     # because the only variable is zlag, so the other covariates are not used
 
+    # rebuilt_tree_list <- list()
+    # for(i in 1:n.trees){
+    #
+    #   treeexample1 <- sampler$getTrees(treeNums = i,
+    #                                    chainNums = 1,
+    #                                    sampleNums = 1)
+    #
+    #   # rebuilt_tree <- rebuildTree2(treeexample1)
+    #
+    #   rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+    #
+    # }
+
+
+
     for(item_ind in 1:n.item){
         list_inter_mats <- list()
 
@@ -1448,7 +1463,9 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
           # rebuilt_tree <- rebuildTree2(treeexample1)
           rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-          #must use covariates for individual indiv at time period t
+          # rebuilt_tree <- rebuilt_tree_list[[i]]
+
+                    #must use covariates for individual indiv at time period t
           # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, as.matrix(df_for_dbart$x[obs_indices[1]]) )
           # list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree$var == -1 , 5:7]
           list_inter_mats[[i]] <- rebuilt_tree[rebuilt_tree[,4] == -1 , 5:7, drop = FALSE]
@@ -3797,7 +3814,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
     # sigma2.beta = initial.list$sigma2.beta
   }
 
-
+  Xmat.train <- as.matrix(Xmat.train)
 
   ## store initial value
   #
@@ -3984,7 +4001,22 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
     intersectmat_tmin1 <- NA
     list_item_intersectmats_tmin1 <- NA
 
+    rebuilt_tree_itemlist <- list()
 
+    for(index_item in 1:n.item){
+      rebuilt_tree_list <- list()
+      for(i in 1:n.trees){
+
+        treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
+                                         chainNums = 1,
+                                         sampleNums = 1)
+
+        # rebuilt_tree <- rebuildTree2(treeexample1)
+
+        rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+      }
+      rebuilt_tree_itemlist[[index_item]] <- rebuilt_tree_list
+    }
 
     # num_regions <- nrow(intersectmat)
 
@@ -4050,7 +4082,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
         #     # print("Xmat.train = ")
         #     # print(Xmat.train)
         #     # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-        #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+        #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
         #                                                              as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
         #   }
         #
@@ -4087,20 +4119,26 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
+            # treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
+            #                                  chainNums = 1,
+            #                                  sampleNums = 1)
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
+            rebuilt_tree <- (rebuilt_tree_itemlist[[index_item]])[[i]]
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
-
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+            # print("(rebuilt_tree) = ")
+            # print((rebuilt_tree))
+            # print("class(rebuilt_tree) = ")
+            # print(class(rebuilt_tree))
+            # print("class((Xmat.train[obs_one_ind,-1, drop = FALSE]) ) = ")
+            # print(class((Xmat.train[obs_one_ind,-1, drop = FALSE]) ))
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
           } #end loop over trees
 
@@ -4148,7 +4186,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
         #     rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
         #     #must use covariates for individual indiv at time period t
         #     # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-        #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+        #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
         #                                                              as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
         #   }
         #   intersectmat <- interNtreesB(list_inter_mats)
@@ -4172,15 +4210,18 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
           obs_one_ind <- obs_indices[index_item]
           list_inter_mats <- list()
           for(i in 1:n.trees){
-            treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
-                                                               chainNums = 1,
-                                                               sampleNums = 1)
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            # treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
+            #                                                    chainNums = 1,
+            #                                                    sampleNums = 1)
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+            rebuilt_tree <- (rebuilt_tree_itemlist[[index_item]])[[i]]
+
             #must use covariates for individual indiv at time period t
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
           } #end loop over trees
           intersectmat <- interNtreesB(list_inter_mats)
           intersectmat <- cbind(intersectmat, rep(NA, nrow(intersectmat)))
@@ -4229,7 +4270,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
           #     rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
           #     #must use covariates for individual indiv at time period t
           #     # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-          #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
+          #     list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
           #                                                              as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
           #   }
           #   intersectmat <- interNtreesB(list_inter_mats)
@@ -4241,15 +4282,18 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
             obs_one_ind <- (t - 1)*n.ranker*n.item+n.item*(indiv-1) + index_item
             list_inter_mats <- list()
             for(i in 1:n.trees){
-              treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # treeexample1 <- samplerlist[[index_item]]$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+              rebuilt_tree <- (rebuilt_tree_itemlist[[index_item]])[[i]]
+
               #must use covariates for individual indiv at time period t
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
             } #end loop over trees
             intersectmat <- interNtreesB(list_inter_mats)
             list_item_intersectmats[[index_item]] <- intersectmat
@@ -5546,8 +5590,6 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
           # and if it is not a bug
           # then need to go back to beginning of this iteration of the Gibbs sampler
           # and sample Zmat again
-
-
           temp_break <- 1
           break
           # stop("new z values not consistent with tree structure, must draw again")
@@ -5572,9 +5614,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
           # }
           #
           # #check that Zmat and  Zlag.mat are updated outside the while loop and for-loop over j
-
         }
-
         if(temp_break==1){
           break
         }
@@ -5582,8 +5622,6 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
       if(temp_break==1){
         break
       }
-
-
     }
 
     # if need to draw z values again, go back to start of loop
@@ -9293,7 +9331,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     }
 
-
+    Xmat.train <- as.matrix(Xmat.train)
     # print("error after dbarts")
 
     #set the response.
@@ -9594,6 +9632,18 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
     list_item_intersectmats_tmin1 <- NA
 
 
+    rebuilt_tree_list <- list()
+    for(i in 1:n.trees){
+
+      treeexample1 <- sampler$getTrees(treeNums = i,
+                                       chainNums = 1,
+                                       sampleNums = 1)
+
+      # rebuilt_tree <- rebuildTree2(treeexample1)
+
+      rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+    }
 
     # num_regions <- nrow(intersectmat)
 
@@ -9633,15 +9683,15 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            treeexample1 <- sampler$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
+            # treeexample1 <- sampler$getTrees(treeNums = i,
+            #                                  chainNums = 1,
+            #                                  sampleNums = 1)
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
+            rebuilt_tree <- rebuilt_tree_list[[i]]
             # print("rebuilt_tree = ")
             # print(rebuilt_tree)
 
@@ -9665,8 +9715,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
 
           }
@@ -9705,20 +9755,22 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
 
             } #end loop over trees
@@ -9764,20 +9816,22 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            treeexample1 <- sampler$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
+            # treeexample1 <- sampler$getTrees(treeNums = i,
+            #                                  chainNums = 1,
+            #                                  sampleNums = 1)
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            rebuilt_tree <- rebuilt_tree_list[[i]]
 
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
           }
 
@@ -9815,20 +9869,22 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
             } #end loop over trees
 
@@ -9884,20 +9940,22 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
             }
 
@@ -9919,20 +9977,22 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
               for(i in 1:n.trees){
 
-                treeexample1 <- sampler$getTrees(treeNums = i,
-                                                 chainNums = 1,
-                                                 sampleNums = 1)
+                # treeexample1 <- sampler$getTrees(treeNums = i,
+                #                                  chainNums = 1,
+                #                                  sampleNums = 1)
+                #
+                # # rebuilt_tree <- rebuildTree2(treeexample1)
+                #
+                # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-                # rebuilt_tree <- rebuildTree2(treeexample1)
-
-                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                rebuilt_tree <- rebuilt_tree_list[[i]]
 
                 #must use covariates for individual indiv at time period t
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                         as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                         (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
 
               } #end loop over trees
@@ -17724,7 +17784,7 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
 
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y) # to make other lines more efficient
 
 
 
@@ -18028,7 +18088,20 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
     intersectmat_tmin1 <- NA
     list_item_intersectmats_tmin1 <- NA
 
+    rebuilt_tree_list <- list()
+    for(i in 1:n.trees){
 
+      temptree <- curr_trees[[i]]$tree_matrix
+
+      treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+
+      temp_na_inds <- is.na(temptree[,'split_variable'])
+
+      treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+
+      rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+    }
 
     # num_regions <- nrow(intersectmat)
 
@@ -18068,48 +18141,48 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            # #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
             #
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            # print("temp_na_inds = ")
-            # print(temp_na_inds)
+            # temptree <- curr_trees[[i]]$tree_matrix
             #
-            # print("treeexample1 = ")
-            # print(treeexample1)
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
             #
-            # print("temptree[temp_na_inds,'mu'] = ")
-            # print(temptree[temp_na_inds,'mu'])
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # # print("temp_na_inds = ")
+            # # print(temp_na_inds)
+            # #
+            # # print("treeexample1 = ")
+            # # print(treeexample1)
+            # #
+            # # print("temptree[temp_na_inds,'mu'] = ")
+            # # print(temptree[temp_na_inds,'mu'])
+            #
+            # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
+            rebuilt_tree <- rebuilt_tree_list[[i]]
             # print("rebuilt_tree = ")
             # print(rebuilt_tree)
 
@@ -18133,8 +18206,8 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
 
           }
@@ -18173,53 +18246,55 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
-
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-
-              # print("temp_na_inds = ")
-              # print(temp_na_inds)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
               #
-              # print("treeexample1 = ")
-              # print(treeexample1)
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
               #
-              # print("temptree[temp_na_inds,'mu'] = ")
-              # print(temptree[temp_na_inds,'mu'])
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              #
+              # # print("temp_na_inds = ")
+              # # print(temp_na_inds)
+              # #
+              # # print("treeexample1 = ")
+              # # print(treeexample1)
+              # #
+              # # print("temptree[temp_na_inds,'mu'] = ")
+              # # print(temptree[temp_na_inds,'mu'])
+              #
+              # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
             } #end loop over trees
@@ -18265,43 +18340,45 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
+            #
+            # temptree <- curr_trees[[i]]$tree_matrix
+            #
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+            #
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            # # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-            # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            rebuilt_tree <- rebuilt_tree_list[[i]]
 
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
           }
 
@@ -18340,44 +18417,46 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
             } #end loop over trees
 
@@ -18432,44 +18511,46 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
             }
 
@@ -18491,43 +18572,45 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
 
               for(i in 1:n.trees){
 
-                # treeexample1 <- sampler$getTrees(treeNums = i,
-                #                                  chainNums = 1,
-                #                                  sampleNums = 1)
+                # # treeexample1 <- sampler$getTrees(treeNums = i,
+                # #                                  chainNums = 1,
+                # #                                  sampleNums = 1)
+                #
+                # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+                # #                                   treeNums = i,
+                # #                                   chainNums = 1,
+                # #                                   sampleNums = 1)
+                #
+                # temptree <- curr_trees[[i]]$tree_matrix
+                #
+                # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+                #
+                # temp_na_inds <- is.na(temptree[,'split_variable'])
+                # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+                #
+                # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+                # #   1,#rep(sampleNums, nrow(temptree)),
+                # #   i,#rep(treeNums, nrow(temptree)),
+                # #   temptree[, 'node_size'],
+                # #   # mybarttree[,'split_variable'],
+                # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+                # #          -1,
+                # #          temptree[,'split_variable']),
+                # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+                # #          temptree[,'mu'],
+                # #          temptree[,'split_value']))
+                # # # rebuilt_tree <- rebuildTree2(treeexample1)
+                #
+                # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-                # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-                #                                   treeNums = i,
-                #                                   chainNums = 1,
-                #                                   sampleNums = 1)
-
-                temptree <- curr_trees[[i]]$tree_matrix
-
-                treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-                temp_na_inds <- is.na(temptree[,'split_variable'])
-                treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-                # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-                #   1,#rep(sampleNums, nrow(temptree)),
-                #   i,#rep(treeNums, nrow(temptree)),
-                #   temptree[, 'node_size'],
-                #   # mybarttree[,'split_variable'],
-                #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-                #          -1,
-                #          temptree[,'split_variable']),
-                #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-                #          temptree[,'mu'],
-                #          temptree[,'split_value']))
-                # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                rebuilt_tree <- rebuilt_tree_list[[i]]
 
                 #must use covariates for individual indiv at time period t
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                         as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                         (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
               } #end loop over trees
@@ -20326,7 +20409,7 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
     } # End loop through trees
 
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y) # to make other lines more efficient
     # sum_of_squares = sum((y_scale - y_hat)^2)
 
     # Update sigma2 (variance of the residuals)
@@ -26485,7 +26568,7 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
 
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y) # to make other lines more efficient
 
 
 
@@ -26790,7 +26873,20 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
     list_item_intersectmats_tmin1 <- NA
 
 
+    rebuilt_tree_list <- list()
+    for(i in 1:n.trees){
 
+      temptree <- curr_trees[[i]]$tree_matrix
+
+      treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+
+      temp_na_inds <- is.na(temptree[,'split_variable'])
+
+      treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+
+      rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+    }
     # num_regions <- nrow(intersectmat)
 
     # print("Line 1169")
@@ -26829,48 +26925,48 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            # #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
             #
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            # print("temp_na_inds = ")
-            # print(temp_na_inds)
+            # temptree <- curr_trees[[i]]$tree_matrix
             #
-            # print("treeexample1 = ")
-            # print(treeexample1)
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
             #
-            # print("temptree[temp_na_inds,'mu'] = ")
-            # print(temptree[temp_na_inds,'mu'])
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # # print("temp_na_inds = ")
+            # # print(temp_na_inds)
+            # #
+            # # print("treeexample1 = ")
+            # # print(treeexample1)
+            # #
+            # # print("temptree[temp_na_inds,'mu'] = ")
+            # # print(temptree[temp_na_inds,'mu'])
+            #
+            # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
+            rebuilt_tree <- rebuilt_tree_list[[i]]
             # print("rebuilt_tree = ")
             # print(rebuilt_tree)
 
@@ -26894,8 +26990,8 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
 
           }
@@ -26934,53 +27030,55 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
-
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-
-              # print("temp_na_inds = ")
-              # print(temp_na_inds)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
               #
-              # print("treeexample1 = ")
-              # print(treeexample1)
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
               #
-              # print("temptree[temp_na_inds,'mu'] = ")
-              # print(temptree[temp_na_inds,'mu'])
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              #
+              # # print("temp_na_inds = ")
+              # # print(temp_na_inds)
+              # #
+              # # print("treeexample1 = ")
+              # # print(treeexample1)
+              # #
+              # # print("temptree[temp_na_inds,'mu'] = ")
+              # # print(temptree[temp_na_inds,'mu'])
+              #
+              # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
             } #end loop over trees
@@ -27026,43 +27124,44 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
-
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-            # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
+            #
+            # temptree <- curr_trees[[i]]$tree_matrix
+            #
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+            #
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            # # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            rebuilt_tree <- rebuilt_tree_list[[i]]
 
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
           }
 
@@ -27101,44 +27200,45 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
-
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
             } #end loop over trees
 
@@ -27194,44 +27294,45 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
-
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
             }
 
@@ -27253,43 +27354,44 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
 
               for(i in 1:n.trees){
 
-                # treeexample1 <- sampler$getTrees(treeNums = i,
-                #                                  chainNums = 1,
-                #                                  sampleNums = 1)
-
-                # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-                #                                   treeNums = i,
-                #                                   chainNums = 1,
-                #                                   sampleNums = 1)
-
-                temptree <- curr_trees[[i]]$tree_matrix
-
-                treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-                temp_na_inds <- is.na(temptree[,'split_variable'])
-                treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-                # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-                #   1,#rep(sampleNums, nrow(temptree)),
-                #   i,#rep(treeNums, nrow(temptree)),
-                #   temptree[, 'node_size'],
-                #   # mybarttree[,'split_variable'],
-                #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-                #          -1,
-                #          temptree[,'split_variable']),
-                #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-                #          temptree[,'mu'],
-                #          temptree[,'split_value']))
-                # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                # # treeexample1 <- sampler$getTrees(treeNums = i,
+                # #                                  chainNums = 1,
+                # #                                  sampleNums = 1)
+                #
+                # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+                # #                                   treeNums = i,
+                # #                                   chainNums = 1,
+                # #                                   sampleNums = 1)
+                #
+                # temptree <- curr_trees[[i]]$tree_matrix
+                #
+                # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+                #
+                # temp_na_inds <- is.na(temptree[,'split_variable'])
+                # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+                #
+                # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+                # #   1,#rep(sampleNums, nrow(temptree)),
+                # #   i,#rep(treeNums, nrow(temptree)),
+                # #   temptree[, 'node_size'],
+                # #   # mybarttree[,'split_variable'],
+                # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+                # #          -1,
+                # #          temptree[,'split_variable']),
+                # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+                # #          temptree[,'mu'],
+                # #          temptree[,'split_value']))
+                # # # rebuilt_tree <- rebuildTree2(treeexample1)
+                #
+                # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                rebuilt_tree <- rebuilt_tree_list[[i]]
 
                 #must use covariates for individual indiv at time period t
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                         as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                         (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
               } #end loop over trees
@@ -29021,7 +29123,7 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
     } # End loop through trees
 
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y) # to make otehr lines more efficient
     # sum_of_squares = sum((y_scale - y_hat)^2)
 
     # Update sigma2 (variance of the residuals)
@@ -37585,7 +37687,7 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y)
 
 
 
@@ -37889,7 +37991,20 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
     intersectmat_tmin1 <- NA
     list_item_intersectmats_tmin1 <- NA
 
+    rebuilt_tree_list <- list()
+    for(i in 1:n.trees){
 
+      temptree <- curr_trees[[i]]$tree_matrix
+
+      treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+
+      temp_na_inds <- is.na(temptree[,'split_variable'])
+
+      treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+
+      rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+    }
 
     # num_regions <- nrow(intersectmat)
 
@@ -37929,48 +38044,48 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            # #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
             #
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            # print("temp_na_inds = ")
-            # print(temp_na_inds)
+            # temptree <- curr_trees[[i]]$tree_matrix
             #
-            # print("treeexample1 = ")
-            # print(treeexample1)
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
             #
-            # print("temptree[temp_na_inds,'mu'] = ")
-            # print(temptree[temp_na_inds,'mu'])
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # # print("temp_na_inds = ")
+            # # print(temp_na_inds)
+            # #
+            # # print("treeexample1 = ")
+            # # print(treeexample1)
+            # #
+            # # print("temptree[temp_na_inds,'mu'] = ")
+            # # print(temptree[temp_na_inds,'mu'])
+            #
+            # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
+            rebuilt_tree <- rebuilt_tree_list[[i]]
             # print("rebuilt_tree = ")
             # print(rebuilt_tree)
 
@@ -37994,8 +38109,8 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
 
           }
@@ -38034,53 +38149,55 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
-
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-
-              # print("temp_na_inds = ")
-              # print(temp_na_inds)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
               #
-              # print("treeexample1 = ")
-              # print(treeexample1)
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
               #
-              # print("temptree[temp_na_inds,'mu'] = ")
-              # print(temptree[temp_na_inds,'mu'])
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              #
+              # # print("temp_na_inds = ")
+              # # print(temp_na_inds)
+              # #
+              # # print("treeexample1 = ")
+              # # print(treeexample1)
+              # #
+              # # print("temptree[temp_na_inds,'mu'] = ")
+              # # print(temptree[temp_na_inds,'mu'])
+              #
+              # treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              treeexample1[temp_na_inds , 4:5 ] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
             } #end loop over trees
@@ -38126,43 +38243,45 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            # treeexample1 <- sampler$getTrees(treeNums = i,
-            #                                  chainNums = 1,
-            #                                  sampleNums = 1)
+            # # treeexample1 <- sampler$getTrees(treeNums = i,
+            # #                                  chainNums = 1,
+            # #                                  sampleNums = 1)
+            #
+            # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+            # #                                   treeNums = i,
+            # #                                   chainNums = 1,
+            # #                                   sampleNums = 1)
+            #
+            # temptree <- curr_trees[[i]]$tree_matrix
+            #
+            # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+            #
+            # temp_na_inds <- is.na(temptree[,'split_variable'])
+            # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+            #
+            # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+            # #   1,#rep(sampleNums, nrow(temptree)),
+            # #   i,#rep(treeNums, nrow(temptree)),
+            # #   temptree[, 'node_size'],
+            # #   # mybarttree[,'split_variable'],
+            # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+            # #          -1,
+            # #          temptree[,'split_variable']),
+            # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+            # #          temptree[,'mu'],
+            # #          temptree[,'split_value']))
+            # # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-            #                                   treeNums = i,
-            #                                   chainNums = 1,
-            #                                   sampleNums = 1)
-
-            temptree <- curr_trees[[i]]$tree_matrix
-
-            treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-            temp_na_inds <- is.na(temptree[,'split_variable'])
-            treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-            # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-            #   1,#rep(sampleNums, nrow(temptree)),
-            #   i,#rep(treeNums, nrow(temptree)),
-            #   temptree[, 'node_size'],
-            #   # mybarttree[,'split_variable'],
-            #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-            #          -1,
-            #          temptree[,'split_variable']),
-            #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-            #          temptree[,'mu'],
-            #          temptree[,'split_value']))
-            # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            rebuilt_tree <- rebuilt_tree_list[[i]]
 
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
           }
 
@@ -38201,44 +38320,46 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              # # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-              # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
             } #end loop over trees
 
@@ -38294,44 +38415,46 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              # treeexample1 <- sampler$getTrees(treeNums = i,
-              #                                  chainNums = 1,
-              #                                  sampleNums = 1)
+              # # treeexample1 <- sampler$getTrees(treeNums = i,
+              # #                                  chainNums = 1,
+              # #                                  sampleNums = 1)
+              #
+              # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+              # #                                   treeNums = i,
+              # #                                   chainNums = 1,
+              # #                                   sampleNums = 1)
+              #
+              # temptree <- curr_trees[[i]]$tree_matrix
+              #
+              # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+              #
+              # temp_na_inds <- is.na(temptree[,'split_variable'])
+              # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+              #
+              # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+              # #   1,#rep(sampleNums, nrow(temptree)),
+              # #   i,#rep(treeNums, nrow(temptree)),
+              # #   temptree[, 'node_size'],
+              # #   # mybarttree[,'split_variable'],
+              # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+              # #          -1,
+              # #          temptree[,'split_variable']),
+              # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+              # #          temptree[,'mu'],
+              # #          temptree[,'split_value']))
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-              # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-              #                                   treeNums = i,
-              #                                   chainNums = 1,
-              #                                   sampleNums = 1)
-
-              temptree <- curr_trees[[i]]$tree_matrix
-
-              treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-              temp_na_inds <- is.na(temptree[,'split_variable'])
-              treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-              # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-              #   1,#rep(sampleNums, nrow(temptree)),
-              #   i,#rep(treeNums, nrow(temptree)),
-              #   temptree[, 'node_size'],
-              #   # mybarttree[,'split_variable'],
-              #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-              #          -1,
-              #          temptree[,'split_variable']),
-              #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-              #          temptree[,'mu'],
-              #          temptree[,'split_value']))
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train.no.y[obs_indices[1],, drop = FALSE]) )
 
             }
 
@@ -38353,43 +38476,45 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
               for(i in 1:n.trees){
 
-                # treeexample1 <- sampler$getTrees(treeNums = i,
-                #                                  chainNums = 1,
-                #                                  sampleNums = 1)
+                # # treeexample1 <- sampler$getTrees(treeNums = i,
+                # #                                  chainNums = 1,
+                # #                                  sampleNums = 1)
+                #
+                # # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
+                # #                                   treeNums = i,
+                # #                                   chainNums = 1,
+                # #                                   sampleNums = 1)
+                #
+                # temptree <- curr_trees[[i]]$tree_matrix
+                #
+                # treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
+                #
+                # temp_na_inds <- is.na(temptree[,'split_variable'])
+                # treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
+                #
+                # # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
+                # #   1,#rep(sampleNums, nrow(temptree)),
+                # #   i,#rep(treeNums, nrow(temptree)),
+                # #   temptree[, 'node_size'],
+                # #   # mybarttree[,'split_variable'],
+                # #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
+                # #          -1,
+                # #          temptree[,'split_variable']),
+                # #   fast_ifelse(is.na(temptree[,'split_variable']) ,
+                # #          temptree[,'mu'],
+                # #          temptree[,'split_value']))
+                # # # rebuilt_tree <- rebuildTree2(treeexample1)
+                #
+                # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-                # treeexample1 <- mybart2dbart_tree(curr_trees[[i]]$tree_matrix,
-                #                                   treeNums = i,
-                #                                   chainNums = 1,
-                #                                   sampleNums = 1)
-
-                temptree <- curr_trees[[i]]$tree_matrix
-
-                treeexample1 <- cbind(1, i, temptree[, c('node_size','split_variable', 'split_value' ), drop = FALSE])
-
-                temp_na_inds <- is.na(temptree[,'split_variable'])
-                treeexample1[temp_na_inds , 4:5] <- cbind(-1, temptree[temp_na_inds,'mu'])
-
-                # treeexample1 <- cbind(#rep(chainNums, nrow(mybarttree)),
-                #   1,#rep(sampleNums, nrow(temptree)),
-                #   i,#rep(treeNums, nrow(temptree)),
-                #   temptree[, 'node_size'],
-                #   # mybarttree[,'split_variable'],
-                #   fast_ifint_elsevec(is.na(temptree[,'split_variable']) ,
-                #          -1,
-                #          temptree[,'split_variable']),
-                #   fast_ifelse(is.na(temptree[,'split_variable']) ,
-                #          temptree[,'mu'],
-                #          temptree[,'split_value']))
-                # # rebuilt_tree <- rebuildTree2(treeexample1)
-
-                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                rebuilt_tree <- rebuilt_tree_list[[i]]
 
                 #must use covariates for individual indiv at time period t
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                         as.matrix(Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                         (Xmat.train.no.y[obs_one_ind,, drop = FALSE]) )
 
 
               } #end loop over trees
@@ -40120,7 +40245,7 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
 
     } # End loop through trees
 
-
+    Xmat.train.no.y <- as.matrix(Xmat.train.no.y) # to make other lines more efficient
 
     # sum_of_squares = sum((y_scale - y_hat)^2)
 
@@ -41221,7 +41346,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
     # sigma2.beta = initial.list$sigma2.beta
   }
 
-
+  Xmat.train <- as.matrix(Xmat.train)
 
   ## store initial value
   #
@@ -41421,7 +41546,18 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
     list_item_intersectmats_tmin1 <- NA
 
 
+    rebuilt_tree_list <- list()
+    for(i in 1:n.trees){
 
+      treeexample1 <- sampler$getTrees(treeNums = i,
+                                       chainNums = 1,
+                                       sampleNums = 1)
+
+      # rebuilt_tree <- rebuildTree2(treeexample1)
+
+      rebuilt_tree_list[[i]] <- rebuildTree2_cpp(as.matrix(treeexample1))
+
+    }
     # num_regions <- nrow(intersectmat)
 
     # print("Line 1169")
@@ -41460,15 +41596,15 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            treeexample1 <- sampler$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
+            # treeexample1 <- sampler$getTrees(treeNums = i,
+            #                                  chainNums = 1,
+            #                                  sampleNums = 1)
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
 
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
-
-
+            rebuilt_tree <- rebuilt_tree_list[[i]]
             # print("rebuilt_tree = ")
             # print(rebuilt_tree)
 
@@ -41492,8 +41628,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
 
           }
@@ -41532,20 +41668,21 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
 
             } #end loop over trees
@@ -41591,20 +41728,21 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
           for(i in 1:n.trees){
 
-            treeexample1 <- sampler$getTrees(treeNums = i,
-                                             chainNums = 1,
-                                             sampleNums = 1)
-
-            # rebuilt_tree <- rebuildTree2(treeexample1)
-
-            rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            # treeexample1 <- sampler$getTrees(treeNums = i,
+            #                                  chainNums = 1,
+            #                                  sampleNums = 1)
+            #
+            # # rebuilt_tree <- rebuildTree2(treeexample1)
+            #
+            # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+            rebuilt_tree <- rebuilt_tree_list[[i]]
 
             #must use covariates for individual indiv at time period t
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                     as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
           }
 
@@ -41645,20 +41783,21 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
             } #end loop over trees
 
@@ -41714,20 +41853,21 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
             for(i in 1:n.trees){
 
-              treeexample1 <- sampler$getTrees(treeNums = i,
-                                               chainNums = 1,
-                                               sampleNums = 1)
-
-              # rebuilt_tree <- rebuildTree2(treeexample1)
-
-              rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              # treeexample1 <- sampler$getTrees(treeNums = i,
+              #                                  chainNums = 1,
+              #                                  sampleNums = 1)
+              #
+              # # rebuilt_tree <- rebuildTree2(treeexample1)
+              #
+              # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+              rebuilt_tree <- rebuilt_tree_list[[i]]
 
               #must use covariates for individual indiv at time period t
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                       as.matrix(Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                       (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
 
             }
 
@@ -41749,20 +41889,21 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
               for(i in 1:n.trees){
 
-                treeexample1 <- sampler$getTrees(treeNums = i,
-                                                 chainNums = 1,
-                                                 sampleNums = 1)
-
-                # rebuilt_tree <- rebuildTree2(treeexample1)
-
-                rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                # treeexample1 <- sampler$getTrees(treeNums = i,
+                #                                  chainNums = 1,
+                #                                  sampleNums = 1)
+                #
+                # # rebuilt_tree <- rebuildTree2(treeexample1)
+                #
+                # rebuilt_tree <- rebuildTree2_cpp(as.matrix(treeexample1))
+                rebuilt_tree <- rebuilt_tree_list[[i]]
 
                 #must use covariates for individual indiv at time period t
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(as.matrix(rebuilt_tree),
-                                                                         as.matrix(Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
+                                                                         (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
 
 
               } #end loop over trees
