@@ -39,7 +39,8 @@ ARRObartWithCovars(
   N_hdr = 10000,
   rho_hdr = 0.5,
   smoothing_method = "AR",
-  num_horizon = 1
+  num_horizon = 1,
+  max_z_resamples = 10
 )
 }
 \arguments{

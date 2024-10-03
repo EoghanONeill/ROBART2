@@ -56,7 +56,8 @@ ARRObartWithCovars_fullcond_EmpN_topk(
   sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
-  alpha_split_prior = TRUE
+  alpha_split_prior = TRUE,
+  max_z_resamples = 10
 )
 }
 \arguments{

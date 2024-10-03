@@ -34,7 +34,8 @@ ARRObart(
   num_test_periods = 0,
   keep_zmat = FALSE,
   noise_in_pred = 0,
-  seq_z_draws = 1
+  seq_z_draws = 1,
+  max_z_resamples = 10
 )
 }
 \arguments{
