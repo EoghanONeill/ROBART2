@@ -337,6 +337,7 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
 
 
   if(para.expan){
+    stop("para.expan code not written")
     S = sum( Z.vec^2 * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
     theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
   }else{
@@ -347,8 +348,10 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
   alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = 1 + p.cov, ncol = 1 + p.cov) %*% rnorm(1 + p.cov) )
 
 
-  alpha = alpha.beta[c(1:n.item)]
-  beta = alpha.beta[-c(1:n.item)]
+  # alpha = alpha.beta[c(1:n.item)]
+  # beta = alpha.beta[-c(1:n.item)]
+  alpha = alpha.beta[1]
+  beta = alpha.beta[-1]
 
   ### parameter move
   # alpha = alpha - mean(alpha) + mean( rnorm(n.item, mean = 0, sd = sqrt(sigma2.alpha)) )

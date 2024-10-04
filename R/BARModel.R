@@ -61505,7 +61505,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
   draw = list(
     # Z.mat = array(NA, dim = c(n.item, n.ranker*n.time, iter.max)),
     alpha = array(NA, dim = c(n.item, iter.max)),
-    beta = array(NA, dim = c(p.cov + num_lags, iter.max)),
+    beta = array(NA, dim = c( (p.cov + num_lags)*n.item, iter.max)),
     #if the x values do not vary over rankers, then there will only be n.item unique x values
     mu = array(NA, dim = c(length_mu, iter.max)),
     mu_noZgamma = array(NA, dim = c(length_mu, iter.max)),
@@ -61513,7 +61513,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     #
     #can have mu of dimension n.item*n.ranker to operationalize rnanker-specific mu values, then need to edit gibbs update of Z
     #mu = array(NA, dim = c(n.item*n.ranker, iter.max))#,
-    gamcoef = rep(NA, iter.max),
+    gamcoef_mat = matrix(NA, nrow = n.item, ncol = iter.max),
     sigma2.alpha = rep(NA, iter.max),
     sigma2.beta = rep(NA, iter.max)
   )
@@ -61692,29 +61692,6 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     }
 
 
-
-
-    ## initial values for alpha, beta and thus mu
-    alpha = rep(0, n.item)
-    beta = rep(0, p.cov + num_lags)
-    mu = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train) %*% beta )
-    mu_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test) %*% beta )
-
-
-    mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
-    mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
-
-    #coefficient of the lag of the latent variable
-    gamcoef = beta[1]
-    # gamcoef = beta[1:num_lags]
-
-
-    ## initial values for sigma2.alpha and sigma2.beta
-    sigma2.alpha = tau2.alpha
-    sigma2.beta = tau2.beta
-
-
-
     ## initial values for alpha, beta and thus mu
     alpha = rep(0, n.item)
     beta = rep(0, (p.cov + num_lags)*n.item )
@@ -61744,16 +61721,15 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     for(item in 1:n.item){
       drop_inds[(item-1)*num_lags + (1:num_lags) ] <- (item-1)*(p.cov + num_lags) + (1:num_lags)
     }
-    mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-drop_inds] %*% beta[-drop_inds] )
-    mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-drop_inds] %*% beta[-drop_inds] )
+    mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(AllX.train)[,-drop_inds] %*% beta[-drop_inds] )
+    mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(AllX.test)[,-drop_inds] %*% beta[-drop_inds] )
     # mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
     # mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
 
     #coefficient of the lag of the latent variable
     # gamcoef = beta[1]
 
-
-    gamcoef_vec = beta[ (0:(p.cov + num_lags))*n.item +  1]
+    gamcoef_vec = beta[ (0:(n.item-1))*(p.cov + num_lags) +  1]
 
     # gamcoef = beta[1:num_lags]
 
@@ -61762,7 +61738,9 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     sigma2.alpha = tau2.alpha
     sigma2.beta = tau2.beta
 
-
+    if(item_sigbeta){
+      sigma2.beta.vec <-  rep(tau2.beta, n.item)
+    }
     # print(colnames(Xmat.train))
     # print(colnames(Xmat.test))
 
@@ -61793,9 +61771,11 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
     draw$mu_noZgamma[,1] = mu_noZgamma
     draw$mu_noZgamma_test[,1] = mu_noZgamma_test
-    draw$gamcoef[1] = gamcoef
-
-
+    # draw$gamcoef[1] = gamcoef
+    draw$gamcoef_mat[,1] = gamcoef_vec
+    if(item_sigbeta){
+      draw$sigma2.beta.mat[,1] <- sigma2.beta.vec
+    }
 
 
   }# ending  if statement if is null initial list
@@ -61813,13 +61793,13 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
       # mupreds <- sampler$predict(Xmat.train)
 
 
-      temp_test_mat <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,])  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+      temp_test_mat <- as.matrix(AllX.test[1:(n.item*n.ranker) ,])  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
 
       temp_test_preds <- matrix(NA,
                                 nrow = n.item*n.ranker,
                                 ncol = num_test_periods)
 
-      temp_mu_test <- rep(NA,  nrow(Xmat.test) )
+      temp_mu_test <- rep(NA,  nrow(AllX.test) )
 
       # print("colnames(temp_test_mat) = ")
 
@@ -61850,26 +61830,128 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
         #need to rewrite this if want to allow for no observed covariates
 
         if(num_lags ==1){
-          temp_test_mat <-    cbind(  temp_test_preds[ , t1] ,
-                                      as.matrix(Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ))
+          # print("Line 61833")
+          #
+          # print("dim(temp_test_preds) = ")
+          # print(dim(temp_test_preds))
+          #
+          # print("  (0:(n.ranker-1))*n.item + 1 = ")
+          # print(  (0:(n.ranker-1))*n.item + 1)
+          #
+          # print("t1 = ")
+          # print(t1)
+          #
+          # print("dim(AllX.test) = ")
+          # print(dim(AllX.test))
+          #
+          # print("(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 = ")
+          # print((t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1)
+          #
+          # print("(num_lags+1):(p.cov + num_lags)])) = ")
+          # print((num_lags+1):(p.cov + num_lags))
+          #
+          # print("dim(cbind(temp_test_preds[ (0:(n.ranker-1))*n.item + 1 , t1]  ,
+          #                                                     AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+          #                                                       (num_lags+1):(p.cov + num_lags)])) = ")
+          # print(dim(cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , t1]  ,
+          #                  AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+          #                            (num_lags+1):(p.cov + num_lags)])))
+          #
+          # print("dim(tempxmat[(0:(n.ranker-1))*n.item + 1, ])")
+          # print(dim(tempxmat[(0:(n.ranker-1))*n.item + 1, ]))
 
+
+
+          tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = (p.cov + num_lags))
+          tempxmat[(0:(n.ranker-1))*n.item + 1, ]  <-  cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , t1]  ,
+                                                              AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+                                                                (num_lags+1):(p.cov + num_lags)])
+
+          temp_test_mat <- tempxmat
+
+          for(item in 2:n.item){
+            tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = (p.cov + num_lags))
+
+            # print("Line 61854")
+            # print("dim(cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + item , t1]  ,
+            #                                                      AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+            #                                                       (num_lags+1):(p.cov + num_lags)])) =")
+            # print(dim(cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + item , t1]  ,
+            #                 AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+            #                           (num_lags+1):(p.cov + num_lags)])))
+            #
+            # print("dim(tempxmat[(0:(n.ranker-1))*n.item + item, ] ) = ")
+            # print(dim(tempxmat[(0:(n.ranker-1))*n.item + item, ] ))
+
+
+            tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + item , t1]  ,
+                                                                 AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+                                                                  (num_lags+1):(p.cov + num_lags)])
+
+            temp_test_mat <-    cbind(temp_test_mat, tempxmat )
+
+                                      # temp_test_mat <-    cbind(temp_test_mat, temp_test_preds[ , t1] ,
+                                      #  as.matrix(AllX.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(p.cov + num_lags)] )
+          }
         }else{
-          temp_test_mat <-    cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
-                                      as.matrix(Xmat.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ))
+          # temp_test_mat <-    cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
+          #                             as.matrix(AllX.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(p.cov + num_lags)] ))
 
+          # print("Line 61879")
+          #
+          # print("dim(cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , t1]  ,
+          #                                                    temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , 1:(num_lags-1)]  ,
+          #                                                    AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+          #                                                              (num_lags+1):(p.cov + num_lags)]) = ")
+          # print(dim(cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , t1]  ,
+          #                 temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , 1:(num_lags-1)]  ,
+          #                 AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+          #                           (num_lags+1):(p.cov + num_lags)])))
+          #
+          #
+          # print("dim( tempxmat[(0:(n.ranker-1))*n.item + 1, ] ) = ")
+          # print(dim(tempxmat[(0:(n.ranker-1))*n.item + 1, ]))
+
+          tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = (p.cov + num_lags))
+          tempxmat[(0:(n.ranker-1))*n.item + 1, ]  <-  cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , t1]  ,
+                                                             temp_test_preds[  (0:(n.ranker-1))*n.item + 1 , 1:(num_lags-1)]  ,
+                                                             AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + 1 ,
+                                                                       (num_lags+1):(p.cov + num_lags)])
+          temp_test_mat <- tempxmat
+
+          for(item in 2:n.item){
+            tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = (p.cov + num_lags))
+
+            # print("dim(cbind(temp_test_preds[   (0:(n.ranker-1))*n.item + item , t1]  ,
+            #                                                      temp_test_preds[ (0:(n.ranker-1))*n.item + item , 1:(num_lags-1)]  ,
+            #                                                      AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+            #                                                                (num_lags+1):(p.cov + num_lags)]) ) ")
+            # print(dim(cbind(temp_test_preds[ (0:(n.ranker-1))*n.item + item , t1]  ,
+            #                 temp_test_preds[ (0:(n.ranker-1))*n.item + item , 1:(num_lags-1)]  ,
+            #                 AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+            #                           (num_lags+1):(p.cov + num_lags)])))
+            #
+            # print("dim( tempxmat[(0:(n.ranker-1))*n.item + item, ]) = ")
+            # print(dim(dim( tempxmat[(0:(n.ranker-1))*n.item + item, ])))
+
+            tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- cbind(temp_test_preds[  (0:(n.ranker-1))*n.item + item , t1]  ,
+                                                                 temp_test_preds[  (0:(n.ranker-1))*n.item + item , 1:(num_lags-1)]  ,
+                                                                 AllX.test[(t1-1)*(n.item*n.ranker)  +  (0:(n.ranker-1))*n.item + item ,
+                                                                           (num_lags+1):(p.cov + num_lags)])
+            temp_test_mat <-    cbind(temp_test_mat, tempxmat )
+            # temp_test_mat <-    cbind(temp_test_mat, temp_test_preds[ , t1] ,
+            #  as.matrix(AllX.test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(p.cov + num_lags)] )
+          }
         }
 
-        colnames(temp_test_mat) <- colnames(Xmat.test)
+        colnames(temp_test_mat) <- colnames(AllX.test)
 
         #fill in temp_mu_test without noise
         temp_mu_test[(t1-1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ] <- testpredvec
-
-
       }
 
       #also update Zlag.mat.test ?
       #perhaps this is unnecessary here?
-
 
       Zlag.mat.test <- matrix(NA, nrow = num_test_periods*n.ranker*n.item, ncol = num_lags)
 
@@ -61909,7 +61991,6 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
           }
 
-
           # }
         }
       }
@@ -61927,20 +62008,35 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
     }else{
       draw$mu_test[,1] <- initial.list$mu_test
+      if(item_sigbeta){
+        draw$sigma2.beta.mat[,1] <- initial.list$sigma2.beta.vec
+      }
     }
+
 
   }
 
+
+  Xmat.train <-  cbind(Zlag.mat, X.train)
+
   #//////////////////////////////////////////////////////////////////////////
   #//////////////////////////////////////////////////////////////////////////
   #//////////////////////////////////////////////////////////////////////////
   #//////////////////////////////////////////////////////////////////////////
+
+  print("Begin Sampler")
 
   ############# Begin Gibbs sampler#########################
   #//////////////////////////////////////////////////////////////////////////
   ## Gibbs iteration
   for(iter in 2:iter.max){
 
+
+    # calculate variance
+    # tempvar_vec <- (gamcoef_vec^2)*(1+gamcoef_vec^2)+1
+
+
+    ######## sample Z ########################
 
     if(nrow(X.train)==n.item){
       stop("nrow(X.train) not equal to n.item*n.ranker*n.time")
@@ -61959,12 +62055,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
         # if(seq_z_draws==1){
         for(t in 1:n.time){
-
-
-
-
           # update mu for period t-1
-
           #Zlag always zero in period t==0
 
           # Z in period 0 is unaffected since set to zero by default
@@ -62011,12 +62102,14 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
               # draw item by item
 
-              # calculate mean
-              # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
-              tempmean <- (gamcoef*(1+gamcoef^2)*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma  )/((gamcoef^2)*(1+gamcoef^2)+1)
-
-              # calculate variance
-              tempvar <- (gamcoef^2)*(1+gamcoef^2)+1
+              # # calculate mean
+              # # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
+              # tempmean <- (gamcoef*(1+gamcoef^2)*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma  )/((gamcoef^2)*(1+gamcoef^2)+1)
+              tempmean <- (gamcoef_vec*(1+gamcoef_vec^2)*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma  )/((gamcoef_vec^2)*(1+gamcoef_vec^2)+1)
+              #
+              # # calculate variance
+              # tempvar <- (gamcoef^2)*(1+gamcoef^2)+1
+              tempvar_vec <- (gamcoef_vec^2)*(1+gamcoef_vec^2)+1
 
               for(item_ind in 1:n.item){
                 # temp_z_i <- tempz[item_ind]
@@ -62062,12 +62155,18 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
                 # # calculate variance
                 # tempvar <- (gamcoef^2)*(1+gamcoef^2)+1
 
+                # calculate mean
+                # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
+                # tempmean <- (gamcoef*(1+gamcoef^2)*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma  )/((gamcoef^2)*(1+gamcoef^2)+1)
+
+
+
 
                 temp_z_i <- rtruncnorm(n = 1,
                                        a = templower,
                                        b = tempupper,
                                        mean = tempmean[item_ind],
-                                       sd = tempvar)
+                                       sd = tempvar_vec[item_ind])
 
                 tempz[item_ind] <- temp_z_i
                 Z.mat[item_ind,(t-1)*n.ranker + indiv] <- temp_z_i
@@ -62108,7 +62207,8 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
                 # calculate mean
                 # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
-                tempmean <- tempmu_noZgamma + gamcoef*tempz_tm1
+                # tempmean <- tempmu_noZgamma + gamcoef*tempz_tm1
+                tempmean <- tempmu_noZgamma + gamcoef_vec*tempz_tm1
 
                 # calculate variance
                 tempvar <- 1
@@ -62195,10 +62295,12 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
                 # calculate mean
                 # note: not including z0 (latent score in time 0) prior mean in calculation because prior mean set to zero
-                tempmean <- (  gamcoef*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma + gamcoef*tempz_tm1 )/(1+gamcoef^2)
+                # tempmean <- (  gamcoef*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma + gamcoef*tempz_tm1 )/(1+gamcoef^2)
+                tempmean <- (  gamcoef_vec*(tempz_tp1-tempmu_noZgamma_tp1) +tempmu_noZgamma + gamcoef_vec*tempz_tm1 )/(1+gamcoef_vec^2)
 
                 # calculate variance
-                tempvar <- 1+gamcoef^2
+                # tempvar <- 1+gamcoef^2
+                tempvar <- 1+gamcoef_vec^2
 
                 for(item_ind in 1:n.item){
                   # temp_z_i <- tempz[item_ind]
@@ -62237,7 +62339,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
                                          a = templower,
                                          b = tempupper,
                                          mean = tempmean[item_ind],
-                                         sd = tempvar)
+                                         sd = tempvar[item_ind])
 
                   tempz[item_ind] <- temp_z_i
                   Z.mat[item_ind,(t-1)*n.ranker + indiv] <- temp_z_i
@@ -62458,54 +62560,156 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     # }
 
 
-    Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
+    ###### sample coefficients #################
+
+    # Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
     # Xmat.test[,1:ncol(Zlag.mat.test)] <- Zlag.mat.test
+    # tempzmat <- matrix(0, nrow = n.ranker*n.item*n.time, ncol = Zlag.mat)
+    # tempzmat[(0:(n.ranker*n.time-1))*n.item + 1, ]  <- Zlag.mat[(0:(n.ranker*n.time-1))*n.item + 1, ]
 
-    mean.para.update = GibbsUpMuGivenLatentInd(Z.mat = Z.mat, X.mat = Xmat.train,
-                                               weight.vec = rep(1, n.ranker*n.time),
-                                               sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
-                                               n.ranker = n.ranker*n.time,
-                                               n.item = n.item,
-                                               p.cov = p.cov+num_lags,
-                                               para.expan = para.expan)
+    for(item_ind in 1:n.item){
+      tempzmat <- matrix(0, nrow =  n.ranker*n.item*n.time, ncol = ncol(Zlag.mat))
+      tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]  <- Zlag.mat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
 
+      AllX.train[(0:(n.ranker*n.time-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
 
-    if(para.expan){
-      Z.mat = Z.mat/mean.para.update$theta
-      Zlag.mat = Zlag.mat/mean.para.update$theta
-      Xmat.train[,1:ncol(Zlag.mat)] <- Zlag.mat
-    }
+      tempzmat <- matrix(0, nrow =  n.ranker*n.item*num_test_periods, ncol = ncol(Zlag.mat.test))
+      tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]  <- Zlag.mat.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
 
-    # create Z lag test matrix
-
-
-
-
-    alpha = mean.para.update$alpha
-    beta = mean.para.update$beta
-    mu = as.vector( rep(alpha, n.ranker*n.time) + (Xmat.train) %*% beta )
-    # mutest = as.vector( rep(alpha, n.ranker) + Xmat.test %*% beta )
-
-    mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
-
-    #coefficient of the lag of the latent variable
-    gamcoef = beta[1]
-    # gamcoef = beta[1:num_lags]
-
-
-    # update hyper para sigma2.alpha and sigma2.beta
-    sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
-    if(p.cov > 0){
-      sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+      AllX.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
     }
 
 
+    Xmat.train <-  cbind(Zlag.mat, X.train)
 
 
+    if(item_sigbeta){
+
+      for(item in 1:n.item){
+
+        Xmat.train_temp <- AllX.train[ (0:(n.ranker*n.time-1))*n.item +item  , (item - 1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+        # Xmat.test_temp <- AllX.test[ (0:(n.ranker*num_test_periods-1))*n.item +item  , (item - 1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+
+        mean.para.update = GibbsUpMuGivenLatent_oneitemcoeff(Z.vec = as.vector(Z.mat[item,]), X.mat = Xmat.train_temp,
+                                                             weight.vec = rep(1, n.ranker*n.time),
+                                                             sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta.vec[item],
+                                                             n.ranker = n.ranker*n.time,# n.item = n.item,
+                                                             p.cov = p.cov + num_lags,
+                                                             para.expan = para.expan)
 
 
+        ### for check only
+        if(para.expan){
+          stop("code does not support para.expan")
+
+          Z.mat = Z.mat/mean.para.update$theta
+        }
+        alpha[item] = mean.para.update$alpha
+        beta[ (item-1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ] = mean.para.update$beta
+
+        # print("ncol(Xmat.train) = ")
+        # print(ncol(Xmat.train))
+        # print("nrow(Xmat.train) = ")
+        # print(nrow(Xmat.train))
+        # print("n.ranker = ")
+        # print(n.ranker)
+        # print("n.item = ")
+        # print(n.item)
+        # itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+        # itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
+
+        # mu = as.vector( rep(alpha, n.ranker) + (itembinmat %x% Xmat.train) %*% beta )
+        # mu_test = as.vector( rep(alpha, num_test_rankers) + (itembinmat_test %x% Xmat.test) %*% beta )
+
+        #possibly more efficient
+        # for(item in 1:n.item){
+          mu[ (0:(n.ranker*n.time-1))*n.item +item ] <- rep(alpha[item], n.ranker*n.time) + Xmat.train_temp %*% beta[ (item-1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+          # mu_test[ (0:(n.ranker*num_test_periods-1))*n.item +item ] <- rep(alpha[item], n.ranker*num_test_periods) + Xmat.test_temp %*% beta[ (item-1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+        # }
+
+        # mu = as.vector( rep(alpha, n.ranker) + Xmat.train %*% beta )
+        # mu_test = as.vector( rep(alpha, num_test_rankers) + Xmat.test %*% beta )
+
+        # mu = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(AllX.train) %*% beta )
+        # mu_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(AllX.test) %*% beta )
+
+        # mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
+        # mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
+
+        #coefficient of the lag of the latent variable
+        # gamcoef = beta[1]
+
+        # update hyper para sigma2.alpha and sigma2.beta
+        if(p.cov > 0){
+          # sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+          sigma2.beta.vec[item] = GibbsUpsigma2(beta[ (item-1)*p.cov + (1:p.cov) ], nu.beta, tau2.beta)
+        }
+
+      } # end loop over items
+
+      mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + AllX.train[,-drop_inds] %*% beta[-drop_inds] )
+      # mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + AllX.test[,-drop_inds] %*% beta[-drop_inds] )
+
+      gamcoef_vec = beta[ (0:(n.item-1))*(p.cov + num_lags) +  1]
+
+      sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
 
 
+    }else{
+
+      mean.para.update = GibbsUpMuGivenLatent_itemcoeffs(Z.mat = Z.mat, X.mat = Xmat.train, # AllX.train, # Xmat.train,
+                                                 weight.vec = rep(1, n.ranker*n.time),
+                                                 sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+                                                 n.ranker = n.ranker*n.time,
+                                                 n.item = n.item,
+                                                 p.cov = p.cov+num_lags,
+                                                 para.expan = para.expan)
+
+
+      if(para.expan){
+        stop("code does not support para.expan")
+        Z.mat = Z.mat/mean.para.update$theta
+        Zlag.mat = Zlag.mat/mean.para.update$theta
+
+        for(item_ind in 1:n.item){
+          tempzmat <- matrix(0, nrow =  n.ranker*n.item*n.time, ncol = ncol(Zlag.mat))
+          tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]  <- Zlag.mat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
+
+          AllX.train[(0:(n.ranker*n.time-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
+
+        }
+      }
+
+
+      alpha = mean.para.update$alpha
+      beta = mean.para.update$beta
+      # mu = as.vector( rep(alpha, n.ranker*n.time) + (Xmat.train) %*% beta )
+      # mutest = as.vector( rep(alpha, n.ranker) + Xmat.test %*% beta )
+
+
+      for(item in 1:n.item){
+        Xmat.train_temp <- AllX.train[ (0:(n.ranker*n.time-1))*n.item +item  , (item - 1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+        mu[ (0:(n.ranker*n.time-1))*n.item +item ] <- rep(alpha[item], n.ranker*n.time) + Xmat.train_temp %*% beta[ (item-1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+        # mu_test[ (0:(n.ranker*num_test_periods-1))*n.item +item ] <- rep(alpha[item], n.ranker*num_test_periods) + Xmat.test_temp %*% beta[ (item-1)*(p.cov + num_lags)  + (1:(p.cov + num_lags)) ]
+      }
+      # mu = as.vector( rep(alpha, n.ranker*n.time) + AllX.train %*% beta)
+
+      # mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + as.matrix(Xmat.train)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
+      #
+      # #coefficient of the lag of the latent variable
+      # gamcoef = beta[1]
+      # gamcoef = beta[1:num_lags]
+      mu_noZgamma = as.vector( rep(alpha, n.ranker*n.time) + AllX.train[,-drop_inds] %*% beta[-drop_inds] )
+      # mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + AllX.test[,-drop_inds] %*% beta[-drop_inds] )
+
+      gamcoef_vec = beta[ (0:(n.item-1))*(p.cov + num_lags) +  1]
+
+      # update hyper para sigma2.alpha and sigma2.beta
+      sigma2.alpha = GibbsUpsigma2(alpha, nu.alpha, tau2.alpha)
+      if(p.cov > 0){
+        sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
+      }
+    }
 
     # store value at this iteration
     if(keep_zmat==TRUE){
@@ -62521,7 +62725,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
 
     draw$mu_noZgamma[,iter] = mu_noZgamma
-    draw$gamcoef[iter] = gamcoef
+    draw$gamcoef_mat[,iter] = gamcoef_vec
 
 
     # print iteration number
@@ -62530,10 +62734,11 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
       # print(c(sigma2.alpha, sigma2.beta))
     }
 
-
+    if(item_sigbeta){
+      draw$sigma2.beta.mat[,iter] <- sigma2.beta.vec
+    }
 
     if( nrow(X.test) > 0 ){
-
 
       # if(is.null(initial.list)){
       # print("samplestemp$test[,1] = ")
@@ -62541,23 +62746,92 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
 
       # mupreds <- sampler$predict(Xmat.train)
 
-      # Xmat.test[,1:num_lags] <-  Zlag.mat.test
+      # # Xmat.test[,1:num_lags] <-  Zlag.mat.test
+      # for(item_ind in 1:n.item){
+      #   tempzmat <- matrix(0, nrow =  n.ranker*n.item*n.time, ncol = ncol(Zlag.mat))
+      #   tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]  <- Zlag.mat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
+      #
+      #   AllX.train[(0:(n.ranker*n.time-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
+      #
+      #   tempzmat <- matrix(0, nrow =  n.ranker*n.item*num_test_periods, ncol = ncol(Zlag.mat.test))
+      #   tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]  <- Zlag.mat.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
+      #
+      #   AllX.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
+      # }
 
+      temp_test_mat <- matrix(0, nrow = n.item*n.ranker,ncol = ncol(AllX.test))
 
-      temp_test_mat <- matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
+      for(item_ind in 1:n.item){
+        for(t  in 1:num_lags){
+          # temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
 
-      for(t  in 1:num_lags){
-        # temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
-        # temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
-        if(noise_in_pred ==1){
-          temp_test_mat[,t] <- as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
-        }else{
-          temp_test_mat[,t] <- as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          # print("dim(temp_test_mat) = ")
+          # print(dim(temp_test_mat))
+          #
+          # print("(0:(n.ranker-1))*n.item + item_ind = ")
+          # print((0:(n.ranker-1))*n.item + item_ind)
+          #
+          # print("t = ")
+          # print(t)
+          #
+          # print("item_ind = ")
+          # print(item_ind)
+          #
+          #
+          # print("(item_ind-1)*(p.cov + num_lags) + t = ")
+          # print((item_ind-1)*(p.cov + num_lags) + t)
+          #
+          #
+          # print("((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker) = ")
+          # print(((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker))
+          #
+          # print("length(temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+          #                 (item_ind-1)*(p.cov + num_lags) + t])")
+          # print(length(temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+          #                         (item_ind-1)*(p.cov + num_lags) + t]))
+          #
+          # print("temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+          #                         (item_ind-1)*(p.cov + num_lags) + t] = ")
+          # print(temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+          #                     (item_ind-1)*(p.cov + num_lags) + t])
+          #
+          #
+          #
+          #
+          #
+          # print("length(as.vector(Z.mat)) = ")
+          # print(length(as.vector(Z.mat)))
+          #
+          # print("length(as.vector(mu)) = ")
+          # print(length(as.vector(mu)))
+          #
+          # print("t = ")
+          # print(t)
+          #
+          # print("item_ind = ")
+          # print(item_ind)
+
+          if(noise_in_pred ==1){
+            temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+                          (item_ind-1)*(p.cov + num_lags) + t] <-
+              as.vector(Z.mat)[((n.time-t)*n.item*n.ranker) + (0:(n.ranker-1))*n.item + item_ind ]
+            # as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          }else{
+            temp_test_mat[(0:(n.ranker-1))*n.item + item_ind,
+                          (item_ind-1)*(p.cov + num_lags) + t] <-
+              as.vector(mu)[((n.time-t)*n.item*n.ranker) + (0:(n.ranker-1))*n.item + item_ind ]
+            # as.vector(mu)[((n.time-t)*n.item*n.ranker+1):((n.time-t +1) *n.item*n.ranker)]
+          }
         }
+
+        temp_test_mat[, (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)] <-
+          as.matrix(AllX.test[1:(n.item*n.ranker) ,
+                              (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)])
       }
 
-      temp_test_mat[, (num_lags+1):ncol(Xmat.test)] <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,
-                                                                           (num_lags+1):ncol(Xmat.test)])
+      # temp_test_mat[, (num_lags+1):ncol(Xmat.test)] <- as.matrix(Xmat.test[1:(n.item*n.ranker) ,
+      #                                                                      (num_lags+1):ncol(Xmat.test)])
 
       # temp_test_mat <- as.data.frame(temp_test_mat)
       # colnames(temp_test_mat) <- colnames(Xmat.test)
@@ -62591,15 +62865,61 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
         if(t1 != num_test_periods){
 
           if(num_lags ==1){
-            temp_test_mat <-  cbind(  temp_test_preds[ , t1] ,
-                                      as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ))
+            for(item_ind in 1:n.item){
 
+              # print("(0:(n.ranker-1))*n.item + item_ind = ")
+              # print((0:(n.ranker-1))*n.item + item_ind)
+              #
+              # print("(item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags) = ")
+              # print((item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags))
+              #
+              # print("(t1)*(n.item*n.ranker)  +  0:(n.ranker - 1) + item_ind = ")
+              # print((t1)*(n.item*n.ranker)  +  0:(n.ranker - 1) + item_ind)
+              #
+              # print("(item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags) = ")
+              # print((item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags))
+              #
+              # print("dim(temp_test_mat) = ")
+              # print(dim(temp_test_mat) )
+              #
+              # print("dim(AllX.test ) = ")
+              # print(dim(AllX.test ))
+              #
+              #
+              # print("item_ind = ")
+              # print(item_ind)
+              #
+              # print("dim(temp_test_mat[(0:(n.ranker-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags)]) = ")
+              # print(dim(temp_test_mat[(0:(n.ranker-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags)]))
+              #
+              # print("dim(AllX.test[(t1)*(n.item*n.ranker)  +  0:(n.ranker - 1) + item_ind,
+              #                               (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)]) = ")
+              # print(dim(AllX.test[(t1)*(n.item*n.ranker)  +  0:(n.ranker - 1) + item_ind,
+              #                     (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)]))
+
+
+
+              temp_test_mat[(0:(n.ranker-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags)] <-
+                cbind(  temp_test_preds[(0:(n.ranker-1))*n.item + item_ind , t1] ,
+                        # as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ),
+                        as.matrix(AllX.test[(t1)*(n.item*n.ranker)  +  0:(n.ranker - 1) + item_ind,
+                                            (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)])
+
+                        )
+            }
           }else{
-            temp_test_mat <-  cbind(  temp_test_preds[ , t1] , temp_test_mat[,1:(num_lags-1)] ,
-                                      as.matrix(Xmat.test[(t1)*(n.item*n.ranker)  +  1:(n.item*n.ranker) ,(num_lags+1):(ncol(Xmat.test))] ))
+            for(item_ind in 1:n.item){
+              temp_test_mat[(0:(n.ranker-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags)] <-
+                cbind(  temp_test_preds[(0:(n.ranker-1))*n.item + item_ind , t1] , temp_test_mat[(0:(n.ranker-1))*n.item + item_ind ,   (item_ind-1)*(p.cov + num_lags) +    1:(num_lags-1)] ,
+                        as.matrix(AllX.test[(t1)*(n.item*n.ranker)  +  0:(n.ranker-1) + item_ind,
+                                            (item_ind - 1)*(p.cov + num_lags) +  (num_lags+1):(p.cov + num_lags)])
+                        )
+            }
 
           }
         }
+
+
 
         # colnames(temp_test_mat) <- colnames(Xmat.test)
 
@@ -62632,27 +62952,82 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
           if(num_test_periods > t ){
             #up to t time periods ahead can be filled in. Rest of test time periods filled in using repeated values of last observation in training data
 
+
+            # print("as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] = ")
+            # print(as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ])
+
+            # tempfillvec <- rep(NA, (num_test_periods - t)*(n.item*n.ranker))
+
+            # print("(0:(n.ranker*(num_test_periods-t)))*n.item + item_ind = ")
+            # print((0:(n.ranker*(num_test_periods-t)))*n.item + item_ind)
+            #
+            # print("(item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags) = ")
+            # print((item_ind-1)*(p.cov + num_lags) + 1:(p.cov + num_lags))
+            #
+            # print("(0:(n.ranker*(num_test_periods-t) - 1))*n.item + item_ind = ")
+            # print((0:(n.ranker*(num_test_periods-t) - 1))*n.item + item_ind)
+            #
+            #
+            # print("dim(temp_test_mat) = ")
+            # print(dim(temp_test_mat))
+
+            # for(item_ind in 1:n.item){
+            #   tempfillvec[(0:(n.ranker*(num_test_periods-t) - 1))*n.item + item_ind] <-
+            #   as.vector(as.matrix(temp_test_mat[,(item_ind-1)*(p.cov + num_lags) + 1 ] # could write 1:num_lags here
+            #                       ))[(0:(n.ranker*(num_test_periods-t)) - 1)*n.item + item_ind  ]
+            # }
+
+            # print("((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker) = ")
+            # print(((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker))
+            #
+            # print("length( ((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker) ) = ")
+            # print( length(  ((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)) )
+            #
+            #
+            # print("(num_test_periods - t)*(n.item*n.ranker) = ")
+            # print((num_test_periods - t)*(n.item*n.ranker))
+            #
+            #
+            # print("dim(Zlag.mat.test) = ")
+            # print(dim(Zlag.mat.test))
+            #
+            # print("tempfillvec = ")
+            # print(tempfillvec)
+            #
+            # print("length(tempfillvec) = ")
+            # print(length(tempfillvec))
+            #
+            # print("length(as.vector(Z.mat)) = ")
+            # print(length(as.vector(Z.mat)))
+
+            # Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
+            #                        as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
             Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):(n.time*n.item*n.ranker)],
-                                   as.vector(as.matrix(temp_test_mat))[1:((num_test_periods - t)*(n.item*n.ranker))  ] )
-
-
-
+                                   as.vector(as.matrix(temp_test_preds))[1:((num_test_periods - t)*(n.item*n.ranker))  ])
           }else{
             #nothing to fill in if num_test_periods <= t
             Zlag.mat.test[,t] <- c(as.vector(Z.mat)[((n.time-t)*n.item*n.ranker+1):((n.time-(t - num_test_periods) )*n.item*n.ranker)]  )
-
           }
-
-
           # }
         }
       }
 
+      for(item_ind in 1:n.item){
+        # tempzmat <- matrix(0, nrow =  n.ranker*n.item*n.time, ncol = ncol(Zlag.mat))
+        # tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]  <- Zlag.mat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
+        #
+        # AllX.train[(0:(n.ranker*n.time-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*n.time-1))*n.item + item_ind, ]
 
+        tempzmat <- matrix(0, nrow =  n.ranker*n.item*num_test_periods, ncol = ncol(Zlag.mat.test))
+        tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]  <- Zlag.mat.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
+
+        AllX.test[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, (item_ind-1)*(p.cov + num_lags) + (1:num_lags) ] <- tempzmat[(0:(n.ranker*num_test_periods-1))*n.item + item_ind, ]
+      }
+      mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + AllX.test[,-drop_inds] %*% beta[-drop_inds] )
 
 
       draw$mu_test[,iter] <- temp_mu_test
-      mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
+      # mu_noZgamma_test = as.vector( rep(alpha, n.ranker*num_test_periods) + as.matrix(Xmat.test)[,-c(1:num_lags)] %*% beta[-c(1:num_lags)] )
       draw$mu_noZgamma_test[,iter] = mu_noZgamma_test
 
       # draw$mu_test[,iter] <- samplestemp$test[,1]
@@ -62670,6 +63045,7 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
     }
 
     Xmat.test[,1:ncol(Zlag.mat.test)] <- Zlag.mat.test
+
     # mutest = as.vector( rep(alpha, n.ranker) + Xmat.test %*% beta )
     # draw$mu_test[,iter] = mutest
 
@@ -72717,7 +73093,7 @@ if(any(is.na(mu))){
 
         mean.para.update = GibbsUpMuGivenLatent_oneitemcoeff(Z.vec = as.vector(Z.mat[item,]), X.mat = Xmat.train_temp,
                                                    weight.vec = rep(1, n.ranker),
-                                                   sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta,
+                                                   sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta.vec[item],
                                                    n.ranker = n.ranker,# n.item = n.item,
                                                    p.cov = p.cov,
                                                    para.expan = para.expan)
@@ -72738,8 +73114,8 @@ if(any(is.na(mu))){
         # print(n.ranker)
         # print("n.item = ")
         # print(n.item)
-        itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
-        itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
+        # itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+        # itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
 
         # mu = as.vector( rep(alpha, n.ranker) + (itembinmat %x% Xmat.train) %*% beta )
         # mu_test = as.vector( rep(alpha, num_test_rankers) + (itembinmat_test %x% Xmat.test) %*% beta )
@@ -72756,7 +73132,7 @@ if(any(is.na(mu))){
         # update hyper para sigma2.alpha and sigma2.beta
         if(p.cov > 0){
           # sigma2.beta = GibbsUpsigma2(beta, nu.beta, tau2.beta)
-          sigma2.beta.vec = GibbsUpsigma2(beta[ (item-1)*p.cov + (1:p.cov) ], nu.beta, tau2.beta)
+          sigma2.beta.vec[item] = GibbsUpsigma2(beta[ (item-1)*p.cov + (1:p.cov) ], nu.beta, tau2.beta)
         }
 
       }
@@ -72820,8 +73196,8 @@ if(any(is.na(mu))){
       # print(n.ranker)
       # print("n.item = ")
       # print(n.item)
-      itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
-      itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
+      # itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+      # itembinmat_test <- matrix( rep( t( diag(n.item) ) , num_test_rankers ) , ncol = n.item , byrow = TRUE )
 
       # Kronecker product does not work unless same covariates for each item
       # mu = as.vector( rep(alpha, n.ranker) + (itembinmat %x% Xmat.train) %*% beta )
