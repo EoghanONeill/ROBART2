@@ -21,18 +21,6 @@ ARBayesRankCovSimpInds(
   para.expan = FALSE,
   print.opt = 100,
   initial.list = NULL,
-  n.trees = 50L,
-  n.burn = 0L,
-  n.samples = 1L,
-  n.thin = 1L,
-  n.chains = 1,
-  n.threads = guessNumCores(),
-  printEvery = 100L,
-  printCutoffs = 0L,
-  rngKind = "default",
-  rngNormalKind = "default",
-  rngSeed = NA_integer_,
-  updateState = FALSE,
   num_lags = 1,
   diff_num_test_rankers = 0,
   num_test_periods = 0,
@@ -60,6 +48,18 @@ ARBayesRankCovSimpInds(
 
 \item{initial.list}{List of initial values for the Gibbs sample. If not null, must contain elements named Z.mat and mu.}
 
+\item{num_lags}{Number of lags of the latent vairable to use as splitting variables.}
+
+\item{diff_num_test_rankers}{Equal to 1 if there is a different number of rankers in the test data than in the training data.}
+
+\item{num_test_periods}{Number of time periods to predict ranks in the test data}
+
+\item{keep_zmat}{Boolean. If equal to TRUE output the draws of Zmat for training data and test data}
+
+\item{noise_in_pred}{If equal to 1, keep noise in test prediction calculations}
+
+\item{X.mat}{An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.}
+
 \item{n.trees}{(dbarts option) A positive integer giving the number of trees used in the sum-of-trees formulation.}
 
 \item{n.chains}{(dbarts option) A positive integer detailing the number of independent chains for the dbarts sampler to use (more than one chain is unlikely to improve speed because only one sample for each call to dbarts).}
@@ -77,18 +77,6 @@ ARBayesRankCovSimpInds(
 \item{rngSeed}{(dbarts option) Random number generator seed, as used in set.seed. If the sampler is running single-threaded or has one chain, the behavior will be as any other sequential algorithm. If the sampler is multithreaded, the seed will be used to create an additional pRNG object, which in turn will be used sequentially seed the threadspecific pRNGs. If equal to NA, the clock will be used to seed pRNGs when applicable.}
 
 \item{updateState}{(dbarts option) Logical setting the default behavior for many sampler methods with regards to the immediate updating of the cached state of the object. A current, cached state is only useful when saving/loading the sampler.}
-
-\item{num_lags}{Number of lags of the latent vairable to use as splitting variables.}
-
-\item{diff_num_test_rankers}{Equal to 1 if there is a different number of rankers in the test data than in the training data.}
-
-\item{num_test_periods}{Number of time periods to predict ranks in the test data}
-
-\item{keep_zmat}{Boolean. If equal to TRUE output the draws of Zmat for training data and test data}
-
-\item{noise_in_pred}{If equal to 1, keep noise in test prediction calculations}
-
-\item{X.mat}{An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific or time-specific covariate values, then the matrix should have N*MT rows where MT is the number of rankers multiplied by the number of time periods. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.}
 }
 \value{
 A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.

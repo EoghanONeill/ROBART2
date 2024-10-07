@@ -49,7 +49,8 @@ RObart_ItemTrees(
   sigquant = 0.95,
   item_intercepts = FALSE,
   tau2.alpha = 5^2,
-  nu.alpha = 3
+  nu.alpha = 3,
+  SUR_errors = FALSE
 )
 }
 \arguments{

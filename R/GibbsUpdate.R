@@ -161,6 +161,63 @@ GibbsUpLatentGivenRankIndnp <- function(pair.comp, Z, mu, sigvec
 }
 
 
+GibbsUpLatentGivenRankIndSUR <- function(pair.comp, Z, mu, Sigma_mean_products, Sigma_sd_products
+){
+  up.order = sort( rowSums( pair.comp, na.rm = TRUE ), decreasing = FALSE, index.return = TRUE )$ix
+  for(i in up.order){
+
+    set1 = which( pair.comp[i, ] == 1)
+    set0 = which( pair.comp[i, ] == 0)
+
+    if(length(set1) > 0){
+      upper = min(Z[set1])
+    }else{
+      upper = Inf
+    }
+
+    if(length(set0) > 0){
+      lower = max(Z[set0])
+    }else{
+      lower = -Inf
+    }
+
+    tempmean <- mu[i] +   Sigma_mean_products[i,] %*% (Z[-i] - mu[-i])
+
+    Z[i] = rtruncnorm( 1, lower, upper,
+                       mean = tempmean, #mu[i],
+                       sd = Sigma_sd_products[i]#1/sqrt(weight[i])
+    )
+
+    if(is.na(Z[i])){
+      print("set1 =")
+      print(set1)
+      print("set0 =")
+      print(set0)
+      print("Z[i] is NA")
+      print("lower is")
+      print(lower)
+      print("upper is")
+      print(upper)
+      print("mu[i] is")
+      print(mu[i])
+      print("sigvec[i] is")
+      print(sigvec[i])
+
+      print("i =")
+      print(i)
+
+      print("Z =")
+      print(Z)
+
+      stop("GibbsUpdate line 86 Stopping at NA value")
+    }
+
+  }
+  return(Z)
+}
+
+
+
 # rank.matrix = matrix(NA, nrow = 5, ncol = 2)
 # rank.matrix[,1] = c(2, 1, NA, NA, NA)
 # rank.matrix[,2] = c(NA, NA, 3, 1, 2)
@@ -238,6 +295,35 @@ GibbsUpLatentGivenRankindividualnp <- function(pair.comp.ten, Z.mat,
   }
   return(Z.mat)
 }
+
+
+
+GibbsUpLatentGivenRankindividualSUR <- function(pair.comp.ten, Z.mat,
+                                               mu, #weight.vec = rep(1, ncol(Z.mat)),
+                                               n.ranker = ncol(Z.mat),
+                                               n.item = ncol(pair.comp.ten[,,1]),
+                                               Sigma_mat = Sigma_mat){
+
+  Sigma_mean_products <- matrix(NA, nrow = n.item, ncol = n.item-1)
+  Sigma_sd_products <- rep(NA, n.item)
+
+  for(i in 1:n.item){
+    # print("i = ")
+    # print(i)
+    # print("Sigma_mat[-i,-i] = ")
+    # print(Sigma_mat[-i,-i])
+    Sigma_mean_products[i, ] <- Sigma_mat[i,-i]%*% solve(Sigma_mat[-i,-i])
+    Sigma_sd_products[i] <- sqrt(Sigma_mat[i,i] - Sigma_mean_products[i, ] %*% Sigma_mat[-i,i])
+  }
+
+  for(j in 1:n.ranker){
+    Z.mat[,j] = GibbsUpLatentGivenRankIndSUR(pair.comp.ten[,,j], Z.mat[,j],
+                                            mu[n.item*(j-1)+1:n.item], #weight = weight.vec[n.item*(j-1)+1:n.item]
+                                            Sigma_mean_products, Sigma_sd_products)
+  }
+  return(Z.mat)
+}
+
 
 
 

@@ -57041,6 +57041,7 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @import truncnorm
 #' @import mvtnorm
 #' @import dbarts
+#' @importFrom matrixsampling rinvwishart
 #' @param pair.comp.ten An \eqn{N} by \eqn{N} by \eqn{M} pairwise comparison tensor for all \eqn{N} entities and \eqn{M} rankers, where the (\eqn{i},\eqn{j},\eqn{m}) element equals 1 if \eqn{i} is ranked higher than \eqn{j} by ranker \eqn{m}, 0 if \eqn{i} is ranker lower than \eqn{j}, and NA if the relation between \eqn{i} and \eqn{j} is missing. Note that the diagonal elements (\eqn{i},\eqn{i},\eqn{m})'s for all rankers should be set to NA as well.
 #' @param X.mat An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.
 #' @param iter.max Number of iterations for Gibbs sampler.
@@ -57115,8 +57116,12 @@ RObart_ItemTrees <- function(pair.comp.ten,
                    sigquant = 0.95,
                    item_intercepts = FALSE,
                    tau2.alpha = 5^2,
-                   nu.alpha = 3){
+                   nu.alpha = 3, SUR_errors = FALSE){
   ## store MCMC draws
+
+  if(np_errors & SUR_errors){
+    stop("cannot have np_errors and SUR_errors")
+  }
 
   # print("begin function")
 
@@ -57208,6 +57213,17 @@ RObart_ItemTrees <- function(pair.comp.ten,
   }
 
 
+  if(SUR_errors){
+    # set various prior parameter values
+
+    rprior <- n.item +1
+    Rprior <- rprior*diag(n.item)
+    eta <- matrix(NA, nrow = n.ranker, ncol =  n.item)
+
+    Sigma_mat <- diag(n.item)
+    draw$Sigma_mat <- array(NA, dim = c(n.item, n.item, iter.max))
+    draw$Sigma_mat[,,1] <- Sigma_mat
+  }
 
 
 
@@ -57674,9 +57690,16 @@ RObart_ItemTrees <- function(pair.comp.ten,
             mutemp2 <- mu
           }
 
-          Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mutemp2,
-                                                    weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
-                                                    n.item = n.item )
+          if(SUR_errors){
+            Z.mat <- GibbsUpLatentGivenRankindividualSUR(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mutemp2,
+                                                      # weight.vec = rep(1, n.ranker),
+                                                      n.ranker = n.ranker,
+                                                      n.item = n.item, Sigma_mat = Sigma_mat )
+          }else{
+            Z.mat <- GibbsUpLatentGivenRankindividual(pair.comp.ten = pair.comp.ten, Z.mat = Z.mat, mu = mutemp2,
+                                                      weight.vec = rep(1, n.ranker), n.ranker = n.ranker,
+                                                      n.item = n.item )
+          }
         }else{
           #stop("nrow(X.train) not equal to n.item or n.ranker")
         }
@@ -57691,6 +57714,9 @@ RObart_ItemTrees <- function(pair.comp.ten,
     if(item_intercepts == TRUE){
       if(np_errors == TRUE){
         stop("code not currently compatible with both item_intercepts == TRUE and np_errors == TRUE, just one or the other, or neither.")
+      }
+      if(SUR_errors == TRUE){
+        stop("code not currently compatible with both item_intercepts == TRUE and SUR_errors == TRUE, just one or the other, or neither.")
       }
       Zmin_mu <- as.matrix(as.vector(Z.mat) - mu,
                            nrow = nrow(Z.mat),
@@ -57714,7 +57740,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
 
 
-
+    mutemp = mu
 
     #### tree samples item loop ###########
     for(item in 1:n.item){
@@ -57724,7 +57750,14 @@ RObart_ItemTrees <- function(pair.comp.ten,
       if(item_intercepts == TRUE){
         samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]) -  rep(alphaintercepts[item], n.ranker) )
       }else{
-        samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+        if(SUR_errors){
+          # ymat[,mm] - (ymat[,-mm]-preds.train[,-mm])%*%(solve(Sigma_mat[-mm,-mm]) %*% Sigma_mat[-mm,mm]  )
+          samplerlist[[item]]$setResponse(y = as.vector(  as.vector( Z.mat[item, ]) -
+                                                            (t(Z.mat[-item, ]) -  t(matrix(mu[ - ( (0:(n.ranker-1))*n.item + item )], nrow = n.item - 1, ncol = n.ranker)))
+                                                          %*%  (solve(Sigma_mat[-item,-item]) %*% Sigma_mat[-item,item]  )  )    )
+        }else{
+          samplerlist[[item]]$setResponse(y = as.vector(Z.mat[item, ]))
+        }
       }
 
       #sampler$setPredictor(x= Xmat.train, column = 1, forceUpdate = TRUE)
@@ -57754,11 +57787,18 @@ RObart_ItemTrees <- function(pair.comp.ten,
         samplerlist[[item]]$setWeights(weights = weightstemp_y)
       }
 
+      if(SUR_errors){
+        samplerlist[[item]]$setSigma(sigma = sqrt(Sigma_mat[item,item] - Sigma_mat[item,-item]%*%(solve(Sigma_mat[-item,-item]) %*% Sigma_mat[-item,item] )))
+      }
       #mu = as.vector( alpha + X.mat %*% beta )
       samplestemp <- samplerlist[[item]]$run()
       samplestemp_list[[item]] <- samplestemp
       mutempitem <- samplestemp$train[,1]
       mutemp[(0:(n.ranker-1))*n.item + item] <- mutempitem
+
+      if(SUR_errors){
+        eta[,item] <- Z.mat[item, ] - mutempitem
+      }
 
       #suppose there are a number of samples
       # print("sigma = ")
@@ -57787,9 +57827,32 @@ RObart_ItemTrees <- function(pair.comp.ten,
         }
       }
 
+      mu = mutemp
+
     }
 
-    mu = mutemp
+
+    if(SUR_errors){
+      rss <- t(eta) %*% eta
+      # print("eta = ")
+      # print(eta)
+      # print("rss = ")
+      # print(rss)
+      Sigma_mat <- matrixsampling::rinvwishart(n = 1, nu = rprior + n.ranker, Omega = Rprior + rss, checkSymmetry = FALSE, epsilon=1e-8)[,,1]
+      # Sigma_mat <- LaplacesDemon::rinvwishart(n = 1, nu = rprior + n.ranker, Omega = Rprior + rss, checkSymmetry = FALSE, epsilon=1e-8)[,,1]
+
+      # print("Sigma_mat =")
+      # print(Sigma_mat)
+
+      if(any(as.vector(eta) >10)){
+        print("iter = ")
+        print(iter)
+        stop("eta >10")
+      }
+
+
+    }
+
     # #set the response.
     # #Check that 0 is a reasonable initial value
     # #perhaps makes more sense to use initial values of Z
@@ -57929,7 +57992,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
         tempuniinds <- tempord[!duplicated(tempsort)]
         # tempuniinds <- unique(match(tempsort,tempcol))
         # counts_ord <- rle2(tempsort)[,2]
-        counts_ord <- rle(tempsort)[,2]
+        counts_ord <- rle(tempsort)$lengths
         vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
 
 
@@ -58322,6 +58385,11 @@ RObart_ItemTrees <- function(pair.comp.ten,
         draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
         # draw$s_prob_z_store[iter,] <- s_z
       }
+    }
+
+    if(SUR_errors){
+      # set various prior parameter values
+      draw$Sigma_mat[,,iter] <- Sigma_mat
     }
 
     # print iteration number
@@ -59173,7 +59241,7 @@ RObartnp <- function(pair.comp.ten,
       tempuniinds <- tempord[!duplicated(tempsort)]
       # tempuniinds <- unique(match(tempsort,tempcol))
       # counts_ord <- rle2(tempsort)[,2]
-      counts_ord <- rle(tempsort)[,2]
+      counts_ord <- rle(tempsort)$lengths
       vartheta_unique_mat <- varthetamattemp[tempuniinds, , drop = FALSE]
 
 
@@ -61374,18 +61442,6 @@ ARBayesRank_NoCovars_partial_ItemCoeffs <- function(pair.comp.ten,
                                          para.expan = FALSE,
                                          print.opt = 100,
                                          initial.list = NULL,
-                                         n.trees = 50L,
-                                         n.burn = 0L,
-                                         n.samples = 1L,
-                                         n.thin = 1L,
-                                         n.chains = 1,
-                                         n.threads = guessNumCores(),
-                                         printEvery = 100L,
-                                         printCutoffs = 0L,
-                                         rngKind = "default",
-                                         rngNormalKind = "default",
-                                         rngSeed = NA_integer_,
-                                         updateState = FALSE,
                                          num_lags = 1,
                                          diff_num_test_rankers = 0,
                                          num_test_periods = 0,
@@ -62941,18 +62997,6 @@ ARBayesRankCov_partial_ItemCoeffs <- function(pair.comp.ten,
                                    para.expan = FALSE,
                                    print.opt = 100,
                                    initial.list = NULL,
-                                   n.trees = 50L,
-                                   n.burn = 0L,
-                                   n.samples = 1L,
-                                   n.thin = 1L,
-                                   n.chains = 1,
-                                   n.threads = guessNumCores(),
-                                   printEvery = 100L,
-                                   printCutoffs = 0L,
-                                   rngKind = "default",
-                                   rngNormalKind = "default",
-                                   rngSeed = NA_integer_,
-                                   updateState = FALSE,
                                    num_lags = 1,
                                    diff_num_test_rankers = 0,
                                    num_test_periods = 0,
@@ -64680,18 +64724,6 @@ ARBayesRankCov_partial <- function(pair.comp.ten,
                                 para.expan = FALSE,
                                 print.opt = 100,
                                 initial.list = NULL,
-                                n.trees = 50L,
-                                n.burn = 0L,
-                                n.samples = 1L,
-                                n.thin = 1L,
-                                n.chains = 1,
-                                n.threads = guessNumCores(),
-                                printEvery = 100L,
-                                printCutoffs = 0L,
-                                rngKind = "default",
-                                rngNormalKind = "default",
-                                rngSeed = NA_integer_,
-                                updateState = FALSE,
                                 num_lags = 1,
                                 diff_num_test_rankers = 0,
                                 num_test_periods = 0,
@@ -65990,18 +66022,6 @@ ARBayesRankCov_topk <- function(ranks_mat ,
                                     para.expan = FALSE,
                                     print.opt = 100,
                                     initial.list = NULL,
-                                    n.trees = 50L,
-                                    n.burn = 0L,
-                                    n.samples = 1L,
-                                    n.thin = 1L,
-                                    n.chains = 1,
-                                    n.threads = guessNumCores(),
-                                    printEvery = 100L,
-                                    printCutoffs = 0L,
-                                    rngKind = "default",
-                                    rngNormalKind = "default",
-                                    rngSeed = NA_integer_,
-                                    updateState = FALSE,
                                     num_lags = 1,
                                     diff_num_test_rankers = 0,
                                     num_test_periods = 0,
@@ -67233,18 +67253,6 @@ ARBayesRankCov_fullcond <- function(pair.comp.ten,
                                     para.expan = FALSE,
                                     print.opt = 100,
                                     initial.list = NULL,
-                                    n.trees = 50L,
-                                    n.burn = 0L,
-                                    n.samples = 1L,
-                                    n.thin = 1L,
-                                    n.chains = 1,
-                                    n.threads = guessNumCores(),
-                                    printEvery = 100L,
-                                    printCutoffs = 0L,
-                                    rngKind = "default",
-                                    rngNormalKind = "default",
-                                    rngSeed = NA_integer_,
-                                    updateState = FALSE,
                                     num_lags = 1,
                                     diff_num_test_rankers = 0,
                                     num_test_periods = 0,
@@ -68469,18 +68477,6 @@ ARBayesRankCovSimpInds <- function(pair.comp.ten,
                                    para.expan = FALSE,
                                    print.opt = 100,
                                    initial.list = NULL,
-                                   n.trees = 50L,
-                                   n.burn = 0L,
-                                   n.samples = 1L,
-                                   n.thin = 1L,
-                                   n.chains = 1,
-                                   n.threads = guessNumCores(),
-                                   printEvery = 100L,
-                                   printCutoffs = 0L,
-                                   rngKind = "default",
-                                   rngNormalKind = "default",
-                                   rngSeed = NA_integer_,
-                                   updateState = FALSE,
                                    num_lags = 1,
                                    diff_num_test_rankers = 0,
                                    num_test_periods = 0,
@@ -69432,18 +69428,6 @@ ARBayesRank_NoCovars_partial <- function(pair.comp.ten,
                                       para.expan = FALSE,
                                       print.opt = 100,
                                       initial.list = NULL,
-                                      n.trees = 50L,
-                                      n.burn = 0L,
-                                      n.samples = 1L,
-                                      n.thin = 1L,
-                                      n.chains = 1,
-                                      n.threads = guessNumCores(),
-                                      printEvery = 100L,
-                                      printCutoffs = 0L,
-                                      rngKind = "default",
-                                      rngNormalKind = "default",
-                                      rngSeed = NA_integer_,
-                                      updateState = FALSE,
                                       num_lags = 1,
                                       diff_num_test_rankers = 0,
                                       num_test_periods = 0,
@@ -70791,17 +70775,6 @@ ARBayesRank_NoCovars_topk <- function(ranks_mat,
                                           print.opt = 100,
                                           initial.list = NULL,
                                           n.trees = 50L,
-                                          n.burn = 0L,
-                                          n.samples = 1L,
-                                          n.thin = 1L,
-                                          n.chains = 1,
-                                          n.threads = guessNumCores(),
-                                          printEvery = 100L,
-                                          printCutoffs = 0L,
-                                          rngKind = "default",
-                                          rngNormalKind = "default",
-                                          rngSeed = NA_integer_,
-                                          updateState = FALSE,
                                           num_lags = 1,
                                           diff_num_test_rankers = 0,
                                           num_test_periods = 0,
@@ -72065,18 +72038,6 @@ ARBayesRank_NoCovars_fullcond <- function(pair.comp.ten,
                                           para.expan = FALSE,
                                           print.opt = 100,
                                           initial.list = NULL,
-                                          n.trees = 50L,
-                                          n.burn = 0L,
-                                          n.samples = 1L,
-                                          n.thin = 1L,
-                                          n.chains = 1,
-                                          n.threads = guessNumCores(),
-                                          printEvery = 100L,
-                                          printCutoffs = 0L,
-                                          rngKind = "default",
-                                          rngNormalKind = "default",
-                                          rngSeed = NA_integer_,
-                                          updateState = FALSE,
                                           num_lags = 1,
                                           diff_num_test_rankers = 0,
                                           num_test_periods = 0,
@@ -73339,18 +73300,6 @@ ARBayesRankCovSimpIndsNoCovars <- function(pair.comp.ten,
                                            para.expan = FALSE,
                                            print.opt = 100,
                                            initial.list = NULL,
-                                           n.trees = 50L,
-                                           n.burn = 0L,
-                                           n.samples = 1L,
-                                           n.thin = 1L,
-                                           n.chains = 1,
-                                           n.threads = guessNumCores(),
-                                           printEvery = 100L,
-                                           printCutoffs = 0L,
-                                           rngKind = "default",
-                                           rngNormalKind = "default",
-                                           rngSeed = NA_integer_,
-                                           updateState = FALSE,
                                            num_lags = 1,
                                            diff_num_test_rankers = 0,
                                            num_test_periods = 0,
@@ -74328,18 +74277,6 @@ BayesRankCovSimp_ItemCoeffs <- function(pair.comp.ten,
                                  para.expan = FALSE,
                                  print.opt = 100,
                                  initial.list = NULL,
-                                 n.trees = 50L,
-                                 n.burn = 0L,
-                                 n.samples = 1L,
-                                 n.thin = 1L,
-                                 n.chains = 1,
-                                 n.threads = guessNumCores(),
-                                 printEvery = 100L,
-                                 printCutoffs = 0L,
-                                 rngKind = "default",
-                                 rngNormalKind = "default",
-                                 rngSeed = NA_integer_,
-                                 updateState = FALSE,
                                  num_lags = 1,
                                  diff_num_test_rankers = 0,
                                  keep_zmat = FALSE,
@@ -74886,18 +74823,6 @@ BayesRankCovSimpInds <- function(pair.comp.ten,
                                  para.expan = TRUE,
                                  print.opt = 100,
                                  initial.list = NULL,
-                                 n.trees = 50L,
-                                 n.burn = 0L,
-                                 n.samples = 1L,
-                                 n.thin = 1L,
-                                 n.chains = 1,
-                                 n.threads = guessNumCores(),
-                                 printEvery = 100L,
-                                 printCutoffs = 0L,
-                                 rngKind = "default",
-                                 rngNormalKind = "default",
-                                 rngSeed = NA_integer_,
-                                 updateState = FALSE,
                                  num_lags = 1,
                                  diff_num_test_rankers = 0,
                                  keep_zmat = FALSE,
