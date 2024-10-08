@@ -74281,7 +74281,8 @@ BayesRankCovSimp_ItemCoeffs <- function(pair.comp.ten,
                                  diff_num_test_rankers = 0,
                                  keep_zmat = FALSE,
                                  topkinit = FALSE,
-                                 item_sigbeta = FALSE){
+                                 item_sigbeta = FALSE,
+                                 speedupZdraw = FALSE){
   ## store MCMC draws
 
   # print("begin function")
@@ -74599,7 +74600,8 @@ if(any(is.na(mu))){
                                                    sigma2.alpha = sigma2.alpha, sigma2.beta = sigma2.beta.vec[item],
                                                    n.ranker = n.ranker,# n.item = n.item,
                                                    p.cov = p.cov,
-                                                   para.expan = para.expan)
+                                                   para.expan = para.expan,
+                                                   speedupZdraw = speedupZdraw)
 
 
         ### for check only
@@ -74651,7 +74653,8 @@ if(any(is.na(mu))){
                                                  n.ranker = n.ranker,
                                                  n.item = n.item,
                                                  p.cov = p.cov,
-                                                 para.expan = para.expan)
+                                                 para.expan = para.expan,
+                                                 speedupZdraw = speedupZdraw)
 
 
       ### for check only

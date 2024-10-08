@@ -391,7 +391,8 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
                                               n.ranker = length(Z.vec),
                                               # n.item = 1, #nrow(Z.mat),
                                               p.cov = ncol(X.mat),
-                                              para.expan = TRUE){
+                                              para.expan = TRUE,
+                                              speedupZdraw = FALSE){
   diagLambda = c( rep(sigma2.alpha, 1), rep(sigma2.beta, p.cov) )
   # V <- cbind( diag(n.item), X.mat )
 
@@ -408,31 +409,44 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
   # print(nrow(Z.mat))
   # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
 
-  ####
-  #use full V and Z for this
-
-  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = 1 +  p.cov) + sum(weight.vec) * t(V) %*% V )
-  Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = 1 +  p.cov, ncol = 1 +  p.cov) %*% t(Sigma.inv.eigen$vectors)
-
-  # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
-  lambda = t(V) %*% as.vector(Z.vec)
-
-  eta = Sigma %*%  lambda
-
-  ###
-
-
-  if(para.expan){
-    stop("para.expan code not written")
-    S = sum( Z.vec^2 * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
-    theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
-  }else{
+  if(speedupZdraw == TRUE){
     theta = 1
+    U = chol ( diag(1/diagLambda, nrow =  1 +  p.cov) + sum(weight.vec) * crossprod(V)  )
+    # U = chol ( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * VtV  )
+    IR = backsolve (U , diag (  1 +  p.cov) )
+    btilde = crossprod ( t ( IR ))%*%( crossprod (V , Z.vec ) )
+    # btilde = crossprod ( t ( IR ))%*%( VtZ )
+    alpha.beta = btilde + # sqrt ( sigma2 )*
+      IR %*% rnorm (  1 +  p.cov )
+
+  }else{
+
+
+    ####
+    #use full V and Z for this
+
+    Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = 1 +  p.cov) + sum(weight.vec) * t(V) %*% V )
+    Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = 1 +  p.cov, ncol = 1 +  p.cov) %*% t(Sigma.inv.eigen$vectors)
+
+    # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
+    lambda = t(V) %*% as.vector(Z.vec)
+
+    eta = Sigma %*%  lambda
+
+    ###
+
+
+    if(para.expan){
+      stop("para.expan code not written")
+      S = sum( Z.vec^2 * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
+      theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
+    }else{
+      theta = 1
+    }
+
+    # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
+    alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = 1 + p.cov, ncol = 1 + p.cov) %*% rnorm(1 + p.cov) )
   }
-
-  # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
-  alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = 1 + p.cov, ncol = 1 + p.cov) %*% rnorm(1 + p.cov) )
-
 
   # alpha = alpha.beta[c(1:n.item)]
   # beta = alpha.beta[-c(1:n.item)]
@@ -455,89 +469,128 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
 ### weight.vec[j]: weight for jth ranker ###
 ### sigma2.alpha, sigma2.beta: prior parameters for mu = (alpha, beta) ###
 ### para.expan: whether use parameter expansion ###
-GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nrow(Z.mat), ncol = 0), weight.vec = rep(1, ncol(Z.mat)), sigma2.alpha = 2, sigma2.beta = 1, n.ranker = ncol(Z.mat), n.item = nrow(Z.mat), p.cov = ncol(X.mat), para.expan = TRUE){
+GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nrow(Z.mat), ncol = 0), weight.vec = rep(1, ncol(Z.mat)),
+                                            sigma2.alpha = 2, sigma2.beta = 1, n.ranker = ncol(Z.mat), n.item = nrow(Z.mat), p.cov = ncol(X.mat),
+                                            para.expan = TRUE,
+                                            speedupZdraw = FALSE){
+
   diagLambda = c( rep(sigma2.alpha, n.item), rep(sigma2.beta, p.cov*n.item) )
   # V <- cbind( diag(n.item), X.mat )
 
-  itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
-  # V <- cbind( itembinmat,
-  #             itembinmat %x% X.mat )
-  V <- itembinmat
 
-  for(item in 1:n.item){
-    tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(X.mat))
-    tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- X.mat[(0:(n.ranker-1))*n.item + item, ]
-    V <- cbind( V, tempxmat )
-  }
 
-  # print("ncol(V) = ")
-  # print(ncol(V))
-  # print("nrow(V) = ")
-  # print(nrow(V))
-  # print("ncol(Z.mat) = ")
-  # print(ncol(Z.mat))
-  # print("nrow(Z.mat) = ")
-  # print(nrow(Z.mat))
-  # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
+  if(speedupZdraw){
+    VtV <- matrix(0, nrow = n.item +  p.cov*n.item, ncol =  n.item +  p.cov*n.item)
+    VtZ <- rep(NA, n.item +  p.cov*n.item)
 
-  ####
-  #use full V and Z for this
-  Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * t(V) %*% V, symmetric = TRUE )
-  Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = n.item +  p.cov*n.item, ncol = n.item +  p.cov*n.item) %*% t(Sigma.inv.eigen$vectors)
+    VtV[1:n.item, 1:n.item] <- diag(n.item)*n.ranker
+    for(item in 1:n.item){
+      tempx1 <- X.mat[(0:(n.ranker-1))*n.item + item, ]
+      VtV[1:n.item, n.item + (item-1)*p.cov + 1:p.cov] <- apply(tempx1,2,sum)
+      VtV[n.item + (item-1)*p.cov + 1:p.cov,
+          n.item + (item-1)*p.cov + 1:p.cov] <- crossprod(tempx1)
+      ztemp <- as.vector(Z.mat[item,])#[(0:(n.ranker-1))*n.item + item ]
+      VtZ[item] <- sum(ztemp)
+      VtZ[n.item + (item-1)*p.cov + 1:p.cov] <- crossprod(tempx1, ztemp)
+    }
 
-  # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
-  lambda = t(V) %*% as.vector(Z.mat)
-
-  eta = Sigma %*%  lambda
-
-  # if(any(is.complex(Sigma.inv.eigen$values))){
-  #
-  #   print("n.item +  p.cov*n.item = ")
-  #   print(n.item +  p.cov*n.item)
-  #
-  #   print(" V = ")
-  #   print(V)
-  #
-  #   print("sum(weight.vec) * t(V) %*% V = ")
-  #   print(sum(weight.vec) * t(V) %*% V)
-  #
-  #   print("t(V) %*% V = ")
-  #   print(t(V) %*% V)
-  #
-  #   print("sum(weight.vec) =")
-  #   print(sum(weight.vec) )
-  #
-  #
-  #
-  #   print("diagLambda = ")
-  #   print(diagLambda)
-  #   print("Sigma.inv.eigen$values = ")
-  #   print(Sigma.inv.eigen$values)
-  #
-  #   print("Sigma.inv.eigen$vectors = ")
-  #   print(Sigma.inv.eigen$vectors)
-  #
-  #   stop("any(is.complex(Sigma.inv.eigen$values))")
-  #
-  # }
-
-  ###
-  # if(any(Sigma.inv.eigen$values < 0)){
-  #   print("Sigma.inv.eigen$values = ")
-  #   print(Sigma.inv.eigen$values)
-  #   stop("any(Sigma.inv.eigen$values < 0)")
-  # }
-
-  if(para.expan){
-    S = sum( colSums(Z.mat^2) * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
-    theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
-  }else{
     theta = 1
-  }
+    # U = chol ( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * crossprod(V)  )
+    U = chol ( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * VtV  )
+    IR = backsolve (U , diag ( n.item +  p.cov*n.item) )
+    # btilde = crossprod ( t ( IR ))%*%( crossprod (V , as.vector(Z.mat) ) )
+    btilde = crossprod ( t ( IR ))%*%( VtZ )
+    alpha.beta = btilde + # sqrt ( sigma2 )*
+      IR %*% rnorm ( n.item + p.cov*n.item )
+  }else{
 
-  # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
-  alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*% diag(1/sqrt(Sigma.inv.eigen$values), nrow = n.item + p.cov*n.item, ncol = n.item + p.cov*n.item) %*% rnorm(n.item + p.cov*n.item) )
+    itembinmat <- matrix( rep( t( diag(n.item) ) , n.ranker ) , ncol = n.item , byrow = TRUE )
+    # V <- cbind( itembinmat,
+    #             itembinmat %x% X.mat )
+    V <- itembinmat
 
+    for(item in 1:n.item){
+      tempxmat <- matrix(0, nrow = n.ranker*n.item, ncol = ncol(X.mat))
+      tempxmat[(0:(n.ranker-1))*n.item + item, ]  <- X.mat[(0:(n.ranker-1))*n.item + item, ]
+      V <- cbind( V, tempxmat )
+    }
+
+
+
+    # print("ncol(V) = ")
+    # print(ncol(V))
+    # print("nrow(V) = ")
+    # print(nrow(V))
+    # print("ncol(Z.mat) = ")
+    # print(ncol(Z.mat))
+    # print("nrow(Z.mat) = ")
+    # print(nrow(Z.mat))
+    # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
+
+    ####
+    #use full V and Z for this
+    # Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * t(V) %*% V, symmetric = TRUE )
+    Sigma.inv.eigen = eigen( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * crossprod(V), symmetric = TRUE )
+    # Sigma.inv.eigen = eigen.sym( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * crossprod(V) , k = n.item +  p.cov*n.item)
+
+    Sigma = Sigma.inv.eigen$vectors %*% diag(1/Sigma.inv.eigen$values, nrow = n.item +  p.cov*n.item, ncol = n.item +  p.cov*n.item) %*% t(Sigma.inv.eigen$vectors)
+
+    # lambda = t(V) %*% rowSums( t( t(Z.mat) * weight.vec ) )
+    lambda = t(V) %*% as.vector(Z.mat)
+
+    eta = Sigma %*%  lambda
+
+    # if(any(is.complex(Sigma.inv.eigen$values))){
+    #
+    #   print("n.item +  p.cov*n.item = ")
+    #   print(n.item +  p.cov*n.item)
+    #
+    #   print(" V = ")
+    #   print(V)
+    #
+    #   print("sum(weight.vec) * t(V) %*% V = ")
+    #   print(sum(weight.vec) * t(V) %*% V)
+    #
+    #   print("t(V) %*% V = ")
+    #   print(t(V) %*% V)
+    #
+    #   print("sum(weight.vec) =")
+    #   print(sum(weight.vec) )
+    #
+    #
+    #
+    #   print("diagLambda = ")
+    #   print(diagLambda)
+    #   print("Sigma.inv.eigen$values = ")
+    #   print(Sigma.inv.eigen$values)
+    #
+    #   print("Sigma.inv.eigen$vectors = ")
+    #   print(Sigma.inv.eigen$vectors)
+    #
+    #   stop("any(is.complex(Sigma.inv.eigen$values))")
+    #
+    # }
+
+    ###
+    # if(any(Sigma.inv.eigen$values < 0)){
+    #   print("Sigma.inv.eigen$values = ")
+    #   print(Sigma.inv.eigen$values)
+    #   stop("any(Sigma.inv.eigen$values < 0)")
+    # }
+
+    if(para.expan){
+      S = sum( colSums(Z.mat^2) * weight.vec ) - as.vector( t(lambda) %*% Sigma %*% lambda )
+      theta = as.vector( sqrt( S/rchisq(1, df = n.item * n.ranker) ) )
+    }else{
+      theta = 1
+    }
+
+    # alpha.beta = as.vector( rmvnorm(1, mean = eta/theta, sigma = Sigma) )
+    alpha.beta = as.vector( eta/theta + Sigma.inv.eigen$vectors %*%
+                              diag(1/sqrt(Sigma.inv.eigen$values), nrow = n.item + p.cov*n.item, ncol = n.item + p.cov*n.item) %*%
+                              rnorm(n.item + p.cov*n.item) )
+
+  } # end else speedupzdraw
 
   # if(any(is.complex( alpha.beta))){
   #   print(" alpha.beta =")

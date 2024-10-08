@@ -23,7 +23,8 @@ BayesRankCovSimp_ItemCoeffs(
   diff_num_test_rankers = 0,
   keep_zmat = FALSE,
   topkinit = FALSE,
-  item_sigbeta = FALSE
+  item_sigbeta = FALSE,
+  speedupZdraw = FALSE
 )
 }
 \arguments{

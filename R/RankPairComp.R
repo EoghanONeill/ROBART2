@@ -182,6 +182,7 @@ Partialtauhat <- function(Rank1, Rank2, method = "kendall"){
   # Rank1subvec <- Rank1[Rank1 %in% Rank2]
   # Rank2subvec <- Rank2[Rank2 %in% Rank1]
 
+
   ntilde <- length(intersect(which(!is.na(Rank1)), which(!is.na(Rank2))))
   # ntilde <- length(unique(c(which(!is.na(Rank1)), which(!is.na(Rank2)))))
 
@@ -228,8 +229,11 @@ Partialtauhat <- function(Rank1, Rank2, method = "kendall"){
   # print(" (1 - tempsum/(ntilde*(ntilde-1)))  /2 = ")
   # print((1 - tempsum/(ntilde*(ntilde-1)))  /2 )
 
-  tempres <- (1 - tempsum/(ntilde*(ntilde-1)))  /2
-
+  if(ntilde >=2){
+    tempres <- (1 - tempsum/(ntilde*(ntilde-1)))  /2
+  }else{
+    tempres <- 1/2
+  }
   # This works when there are no ties
 
   # return( ( 1 - cor(Rank1subvec, Rank2subvec, method = method) )/2 )
