@@ -392,7 +392,7 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
                                               # n.item = 1, #nrow(Z.mat),
                                               p.cov = ncol(X.mat),
                                               para.expan = TRUE,
-                                              speedupZdraw = FALSE){
+                                              speedupcoeffdraw = FALSE){
   diagLambda = c( rep(sigma2.alpha, 1), rep(sigma2.beta, p.cov) )
   # V <- cbind( diag(n.item), X.mat )
 
@@ -409,7 +409,7 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
   # print(nrow(Z.mat))
   # Sigma.old = solve( diag(1/diagLambda, nrow = n.item + p.cov) + sum(weight.vec) * t(V) %*% V )
 
-  if(speedupZdraw == TRUE){
+  if(speedupcoeffdraw == TRUE){
     theta = 1
     U = chol ( diag(1/diagLambda, nrow =  1 +  p.cov) + sum(weight.vec) * crossprod(V)  )
     # U = chol ( diag(1/diagLambda, nrow = n.item +  p.cov*n.item) + sum(weight.vec) * VtV  )
@@ -472,14 +472,14 @@ GibbsUpMuGivenLatent_oneitemcoeff <- function(Z.vec,
 GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nrow(Z.mat), ncol = 0), weight.vec = rep(1, ncol(Z.mat)),
                                             sigma2.alpha = 2, sigma2.beta = 1, n.ranker = ncol(Z.mat), n.item = nrow(Z.mat), p.cov = ncol(X.mat),
                                             para.expan = TRUE,
-                                            speedupZdraw = FALSE){
+                                            speedupcoeffdraw = FALSE){
 
   diagLambda = c( rep(sigma2.alpha, n.item), rep(sigma2.beta, p.cov*n.item) )
   # V <- cbind( diag(n.item), X.mat )
 
 
 
-  if(speedupZdraw){
+  if(speedupcoeffdraw){
     VtV <- matrix(0, nrow = n.item +  p.cov*n.item, ncol =  n.item +  p.cov*n.item)
     VtZ <- rep(NA, n.item +  p.cov*n.item)
 
@@ -590,7 +590,7 @@ GibbsUpMuGivenLatent_itemcoeffs <- function(Z.mat, X.mat = matrix(NA, nrow = nro
                               diag(1/sqrt(Sigma.inv.eigen$values), nrow = n.item + p.cov*n.item, ncol = n.item + p.cov*n.item) %*%
                               rnorm(n.item + p.cov*n.item) )
 
-  } # end else speedupzdraw
+  } # end else speedupcoeffdraw
 
   # if(any(is.complex( alpha.beta))){
   #   print(" alpha.beta =")
