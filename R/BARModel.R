@@ -41347,6 +41347,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
   }
 
   Xmat.train <- as.matrix(Xmat.train)
+  Xmat.train_Xonly <- as.matrix(Xmat.train[,-1,drop=FALSE])
 
   ## store initial value
   #
@@ -41628,8 +41629,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                     Xmat.train_Xonly[obs_indices[1],, drop = FALSE] )
 
 
           }
@@ -41681,8 +41682,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                       Xmat.train_Xonly[obs_one_ind,, drop = FALSE] )
 
 
             } #end loop over trees
@@ -41741,8 +41742,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
             # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                     (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+            list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                     Xmat.train_Xonly[obs_indices[1],, drop = FALSE] )
 
           }
 
@@ -41796,8 +41797,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                       (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                       Xmat.train_Xonly[obs_one_ind,, drop = FALSE] )
 
             } #end loop over trees
 
@@ -41866,8 +41867,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
               # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_indices[1],-1, drop = FALSE] )
 
-              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                       (Xmat.train[obs_indices[1],-1, drop = FALSE]) )
+              list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                       Xmat.train_Xonly[obs_indices[1],, drop = FALSE] )
 
             }
 
@@ -41902,8 +41903,8 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
                 # list_inter_mats[[i]] <- getPredictionsRangesForTree3(rebuilt_tree, Xmat.train[obs_one_ind,-1, drop = FALSE] )
 
-                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp((rebuilt_tree),
-                                                                         (Xmat.train[obs_one_ind,-1, drop = FALSE]) )
+                list_inter_mats[[i]] <- getPredictionsRangesForTree3_cpp(rebuilt_tree,
+                                                                         Xmat.train_Xonly[obs_one_ind,, drop = FALSE] )
 
 
               } #end loop over trees
@@ -42358,11 +42359,31 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
           # print("temp_upper2 = ")
           # print(temp_upper2)
 
+          tempbuffer <- (temp_upper2 - temp_lower2)/100
+
+          if( (temp_upper2 != Inf) & (temp_lower2 != -Inf)){
+            upper_buffered <- temp_upper2 - tempbuffer
+            lower_buffered <- temp_lower2 + tempbuffer
+
+          }else{
+            upper_buffered <- temp_upper2
+            lower_buffered <- temp_lower2
+
+          }
+
+
           zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower2,
-                                   b = temp_upper2,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
                                    mean = temp_mean0,
                                    sd = 1)
+
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower2,
+          #                          b = temp_upper2,
+          #                          mean = temp_mean0,
+          #                          sd = 1)
 
 
           Z.mat[item_ind,  indiv ] <- zdraw_temp
@@ -42700,17 +42721,36 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
             temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
 
-            zdraw_temp <- rtruncnorm(n = 1,
-                                     a=temp_region_probs[region_ind, 2],
-                                     b=temp_region_probs[region_ind, 3],
-                                     mean = temp_mean2_origscale,
-                                     sd = 1)
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_probs[region_ind, 2],
+            #                          b=temp_region_probs[region_ind, 3],
+            #                          mean = temp_mean2_origscale,
+            #                          sd = 1)
 
             # zdraw_temp <- rtruncnorm(n = 1,
             #                          a=temp_region_probs[region_ind, 2],
             #                          b=temp_region_probs[region_ind, 3],
             #                          mean = temp_mean2,
             #                          sd = 1)
+
+            tempbuffer <- (temp_region_probs[region_ind, 3] - temp_region_probs[region_ind, 2])/100
+
+            if( (temp_region_probs[region_ind, 3] != Inf) & (temp_region_probs[region_ind, 2] != -Inf)){
+              upper_buffered <- temp_region_probs[region_ind, 3] - tempbuffer
+              lower_buffered <- temp_region_probs[region_ind, 2] + tempbuffer
+
+            }else{
+              upper_buffered <- temp_region_probs[region_ind, 3]
+              lower_buffered <- temp_region_probs[region_ind, 2]
+
+            }
+
+
+            zdraw_temp <- rtruncnorm(n = 1,
+                                     a = lower_buffered,
+                                     b = upper_buffered,
+                                     mean = temp_mean2_origscale,
+                                     sd = 1)
 
 
 
@@ -42802,17 +42842,31 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
           # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
 
-          zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower3,
-                                   b = temp_upper3,
-                                   mean = temp_mean2_origscale,
-                                   sd = 1)
-
           # zdraw_temp <- rtruncnorm(n = 1,
           #                          a = temp_lower3,
           #                          b = temp_upper3,
-          #                          mean = temp_mean2,
+          #                          mean = temp_mean2_origscale,
           #                          sd = 1)
+
+          tempbuffer <- (temp_upper3 - temp_lower3)/100
+
+          if( (temp_upper3 != Inf) & (temp_lower3 != -Inf)){
+            upper_buffered <- temp_upper3 - tempbuffer
+            lower_buffered <- temp_lower3 + tempbuffer
+
+          }else{
+            upper_buffered <- temp_upper3
+            lower_buffered <- temp_lower3
+
+          }
+
+
+          zdraw_temp <- rtruncnorm(n = 1,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
+                                   mean = temp_mean2_origscale,
+                                   sd = 1)
+
 
 
           Z.mat[item_ind, (n.time -1)*n.ranker + indiv ] <- zdraw_temp
