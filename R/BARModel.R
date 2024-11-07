@@ -2929,6 +2929,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
       }
@@ -5730,6 +5731,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
       if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
       }
@@ -8460,6 +8462,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
     # mutemp <- sampler$predict(df_for_dbart)
@@ -11462,6 +11465,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
     # mutemp <- sampler$predict(df_for_dbart)
@@ -36689,6 +36693,7 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
     # mutemp <- sampler$predict(df_for_dbart)
@@ -43316,6 +43321,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
     # mutemp <- sampler$predict(df_for_dbart)
@@ -58852,6 +58858,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
       if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
+        var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
       }
@@ -61190,6 +61197,7 @@ RObart <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
 
@@ -61792,6 +61800,7 @@ RObart_intercepts <- function(pair.comp.ten,
     if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
+      var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
     }
 
