@@ -33,7 +33,7 @@ RObart_intercepts(
   diff_num_test_rankers = 0,
   keep_zmat = FALSE,
   test_items_ordered = TRUE,
-  sparse = TRUE,
+  sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE

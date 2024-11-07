@@ -53,7 +53,7 @@ ARRObartWithCovars_fullcond_EmpN_partial(
   sigma_mu_prior = FALSE,
   splitting_rules = "discrete",
   max_bad_trees = 10,
-  sparse = TRUE,
+  sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE

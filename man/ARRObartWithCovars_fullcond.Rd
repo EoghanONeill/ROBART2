@@ -43,7 +43,7 @@ ARRObartWithCovars_fullcond(
   tree_power = 2,
   tree_base = 0.95,
   n.burnin = 0,
-  sparse = TRUE,
+  sparse = FALSE,
   alpha_a_y = 0.5,
   alpha_b_y = 1,
   alpha_split_prior = TRUE,

@@ -96,7 +96,7 @@ RObart_ItemTrees(
 
 \item{alpha_split_prior}{If TRUE, set hyperprior for Linero alpha parameter}
 
-\item{n.burnin}{Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.}
+\item{n.burnin}{Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse == TRUE.}
 
 \item{X.mat}{An \eqn{N} by \eqn{L} covariate matrix for the \eqn{N} entities with \eqn{L} covariates. If there are ranker-specific covariate values, then the matrix should have N*M rows where M is the number of rankers. The first N rows correspond to ranker 1, the next N rows correspond to ranker 2, and so on.}
 }

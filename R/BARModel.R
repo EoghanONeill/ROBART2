@@ -710,7 +710,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
                                               tree_power = 2,
                                               tree_base = 0.95,
                                               n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
-                                              sparse = TRUE,
+                                              sparse = FALSE,
                                               alpha_a_y = 0.5,
                                               alpha_b_y = 1,
                                               alpha_split_prior = TRUE,
@@ -3318,7 +3318,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
                                                 tree_power = 2,
                                                 tree_base = 0.95,
                                                 n.burnin = 0, #floor(dim(pair.comp.ten)[1]/2),
-                                                sparse = TRUE,
+                                                sparse = FALSE,
                                                 alpha_a_y = 0.5,
                                                 alpha_b_y = 1,
                                                 alpha_split_prior = TRUE,
@@ -6212,7 +6212,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
                                       tree_power = 2,
                                       tree_base = 0.95,
                                       n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
-                                      sparse = TRUE,
+                                      sparse = FALSE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
                                       alpha_split_prior = TRUE,
@@ -8793,7 +8793,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
                                         tree_power = 2,
                                         tree_base = 0.95,
                                         n.burnin = 0, #floor(dim(pair.comp.ten)[1]/2),
-                                        sparse = TRUE,
+                                        sparse = FALSE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
                                         alpha_split_prior = TRUE,
@@ -11990,7 +11990,7 @@ ARRObartNOCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
                                                 splitting_rules = "discrete",
                                                 loop_order = "time_in_item",
                                                 max_bad_trees = 10,
-                                                sparse = TRUE,
+                                                sparse = FALSE,
                                                 alpha_a_y = 0.5,
                                                 alpha_b_y = 1,
                                                 alpha_split_prior = TRUE){
@@ -17149,7 +17149,7 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
                                                   sigma_mu_prior = FALSE,
                                                   splitting_rules = "discrete",
                                                   max_bad_trees = 10,
-                                                  sparse = TRUE,
+                                                  sparse = FALSE,
                                                   alpha_a_y = 0.5,
                                                   alpha_b_y = 1,
                                                   alpha_split_prior = TRUE){
@@ -29623,7 +29623,7 @@ ARRObartNOCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                  splitting_rules = "discrete",
                                                  loop_order = "time_in_item",
                                                  max_bad_trees = 10,
-                                                 sparse = TRUE,
+                                                 sparse = FALSE,
                                                  alpha_a_y = 0.5,
                                                  alpha_b_y = 1,
                                                  alpha_split_prior = TRUE){
@@ -34618,7 +34618,7 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
                                       tree_power = 2,
                                       tree_base = 0.95,
                                       n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
-                                      sparse = TRUE,
+                                      sparse = FALSE,
                                       alpha_a_y = 0.5,
                                       alpha_b_y = 1,
                                       alpha_split_prior = TRUE,
@@ -37035,7 +37035,7 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
                                                    sigma_mu_prior = FALSE,
                                                    splitting_rules = "discrete",
                                                    max_bad_trees = 10,
-                                                   sparse = TRUE,
+                                                   sparse = FALSE,
                                                    alpha_a_y = 0.5,
                                                    alpha_b_y = 1,
                                                    alpha_split_prior = TRUE){
@@ -40743,7 +40743,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
                                         tree_power = 2,
                                         tree_base = 0.95,
                                         n.burnin = 0 , # floor(dim(pair.comp.ten)[1]/2),
-                                        sparse = TRUE,
+                                        sparse = FALSE,
                                         alpha_a_y = 0.5,
                                         alpha_b_y = 1,
                                         alpha_split_prior = TRUE,
@@ -57121,7 +57121,7 @@ dt_ls <- function(x, df=1, mu=0, sigma=1) (1/sigma) * dt((x - mu)/sigma, df)
 #' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_split_prior If TRUE, set hyperprior for Linero alpha parameter
-#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.
+#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse == TRUE.
 #' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
 #' @export
 SoftRObart_ItemTrees <- function(pair.comp.ten,
@@ -58113,7 +58113,7 @@ SoftRObart_ItemTrees <- function(pair.comp.ten,
 #' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_split_prior If TRUE, set hyperprior for Linero alpha parameter
-#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.
+#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse == TRUE.
 #' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
 #' @export
 RObart_ItemTrees <- function(pair.comp.ten,
@@ -60739,7 +60739,7 @@ RObartnp <- function(pair.comp.ten,
 #' @param alpha_a_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_b_y Linero alpha prior parameter for outcome equation splitting probabilities
 #' @param alpha_split_prior If TRUE, set hyperprior for Linero alpha parameter
-#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse = TRUE.
+#' @param n.burnin Number of burn-in iterations. Burn-in iterations are NOT removed. This option is just used to determine the number of iterations past which splitting probabilities are sampled when sparse == TRUE.
 #' @return A list containing posterior samples of all the missing evaluation scores for all rankers and all the model parameters.
 #' @export
 RObart <- function(pair.comp.ten,
@@ -61344,7 +61344,7 @@ RObart_intercepts <- function(pair.comp.ten,
                               diff_num_test_rankers = 0,
                               keep_zmat = FALSE,
                               test_items_ordered = TRUE,
-                              sparse = TRUE,
+                              sparse = FALSE,
                               alpha_a_y = 0.5,
                               alpha_b_y = 1,
                               alpha_split_prior = TRUE){
