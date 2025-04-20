@@ -7462,11 +7462,33 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
           # print("temp_upper2 = ")
           # print(temp_upper2)
 
+          tempbuffer <- (temp_upper2 - temp_lower2)/100
+
+          if( (temp_upper2 != Inf) & (temp_lower2 != -Inf)){
+            upper_buffered <- temp_upper2 - tempbuffer
+            lower_buffered <- temp_lower2 + tempbuffer
+          }else{
+            upper_buffered <- temp_upper2
+            lower_buffered <- temp_lower2
+            if(temp_upper2 != Inf){
+              upper_buffered <- temp_upper2 - 0.00001
+            }
+            if(temp_lower2 != -Inf){
+              lower_buffered <- temp_lower2 + 0.00001
+            }
+          }
+
+
           zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower2,
-                                   b = temp_upper2,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
                                    mean = temp_mean0,
                                    sd = 1)
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower2,
+          #                          b = temp_upper2,
+          #                          mean = temp_mean0,
+          #                          sd = 1)
 
 
           Z.mat[item_ind,  indiv ] <- zdraw_temp
@@ -7875,12 +7897,34 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
             #
             # }
 
+            tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/100
+
+            if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
+              upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
+              lower_buffered <- temp_region_logprobs[region_ind, 2] + tempbuffer
+            }else{
+              upper_buffered <- temp_region_logprobs[region_ind, 3]
+              lower_buffered <- temp_region_logprobs[region_ind, 2]
+              if(temp_region_logprobs[region_ind, 3] != Inf){
+                upper_buffered <- temp_region_logprobs[region_ind, 3] - 0.00001
+              }
+              if(temp_region_logprobs[region_ind, 2] != -Inf){
+                lower_buffered <- temp_region_logprobs[region_ind, 2] + 0.00001
+              }
+            }
+
 
             zdraw_temp <- rtruncnorm(n = 1,
-                                     a=temp_region_logprobs[region_ind, 2],
-                                     b=temp_region_logprobs[region_ind, 3],
+                                     a=lower_buffered,
+                                     b=upper_buffered,
                                      mean = temp_mean2_origscale,
                                      sd = 1)
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_logprobs[region_ind, 2],
+            #                          b=temp_region_logprobs[region_ind, 3],
+            #                          mean = temp_mean2_origscale,
+            #                          sd = 1)
 
 
             # print("Line 1914 after sample")
@@ -7995,11 +8039,33 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
           # print("line 2208 temp_mean2 = ")
           # print(temp_mean2)
 
+          tempbuffer <- (temp_upper3 - temp_lower3)/100
+
+          if( (temp_upper3 != Inf) & (temp_lower3 != -Inf)){
+            upper_buffered <- temp_upper3 - tempbuffer
+            lower_buffered <- temp_lower3 + tempbuffer
+          }else{
+            upper_buffered <- temp_upper3
+            lower_buffered <- temp_lower3
+            if(temp_upper3 != Inf){
+              upper_buffered <- temp_upper3 - 0.00001
+            }
+            if(temp_lower3 != -Inf){
+              lower_buffered <- temp_lower3 + 0.00001
+            }
+          }
+
           zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower3,
-                                   b = temp_upper3,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
                                    mean = temp_mean2_origscale,
                                    sd = 1)
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower3,
+          #                          b = temp_upper3,
+          #                          mean = temp_mean2_origscale,
+          #                          sd = 1)
 
 
           # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
@@ -10491,11 +10557,35 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
           # print("temp_upper2 = ")
           # print(temp_upper2)
 
+
+          tempbuffer <- (temp_upper2 - temp_lower2)/100
+
+          if( (temp_upper2 != Inf) & (temp_lower2 != -Inf)){
+            upper_buffered <- temp_upper2 - tempbuffer
+            lower_buffered <- temp_lower2 + tempbuffer
+          }else{
+            upper_buffered <- temp_upper2
+            lower_buffered <- temp_lower2
+            if(temp_upper2 != Inf){
+              upper_buffered <- temp_upper2 - 0.0001
+            }
+            if(temp_lower2 != -Inf){
+              lower_buffered <- temp_lower2 + 0.0001
+            }
+          }
+
+
           zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower2,
-                                   b = temp_upper2,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
                                    mean = temp_mean0,
                                    sd = 1)
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower2,
+          #                          b = temp_upper2,
+          #                          mean = temp_mean0,
+          #                          sd = 1)
 
 
           Z.mat[item_ind,  indiv ] <- zdraw_temp
@@ -10758,6 +10848,27 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
               # print("temp_upper3 = ")
               # print(temp_upper3)
 
+              if(any(is.na(c(
+                temp_lower2 , temp_upper3 , temp_lower3 , temp_upper2
+              )))){
+                print("k_ind = ")
+                print(k_ind)
+                print("ncol(temp_region_probs) = ")
+                print(ncol(temp_region_probs))
+                print("nrow(temp_region_probs) = ")
+                print(nrow(temp_region_probs))
+
+                print("intersectmat[k_ind, ] = ")
+                print(intersectmat[k_ind, 2])
+                print("tempz = ")
+                print(tempz)
+
+                print("set0 = ")
+                print(set0)
+                print("set1 = ")
+                print(set1)
+
+              }
 
               if((temp_lower2 > temp_upper3) | (temp_lower3 > temp_upper2)){
                 # intervals do not overlap, therefore assign probability zero
@@ -10876,11 +10987,33 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
             temp_mean2_origscale <- (temp_mean2 + 0.5)*(max_resp - min_resp) + min_resp
 
+            tempbuffer <- (temp_region_logprobs[region_ind, 3] - temp_region_logprobs[region_ind, 2])/100
+
+            if( (temp_region_logprobs[region_ind, 3] != Inf) & (temp_region_logprobs[region_ind, 2] != -Inf)){
+              upper_buffered <- temp_region_logprobs[region_ind, 3] - tempbuffer
+              lower_buffered <- temp_region_logprobs[region_ind, 2] + tempbuffer
+            }else{
+              upper_buffered <- temp_region_logprobs[region_ind, 3]
+              lower_buffered <- temp_region_logprobs[region_ind, 2]
+              if(temp_region_logprobs[region_ind, 3] != Inf){
+                upper_buffered <- temp_region_logprobs[region_ind, 3] - 0.0001
+              }
+              if(temp_region_logprobs[region_ind, 2] != -Inf){
+                lower_buffered <- temp_region_logprobs[region_ind, 2] + 0.0001
+              }
+            }
+
             zdraw_temp <- rtruncnorm(n = 1,
-                                     a=temp_region_logprobs[region_ind, 2],
-                                     b=temp_region_logprobs[region_ind, 3],
+                                     a=lower_buffered,
+                                     b=upper_buffered,
                                      mean = temp_mean2_origscale,
                                      sd = 1)
+
+            # zdraw_temp <- rtruncnorm(n = 1,
+            #                          a=temp_region_logprobs[region_ind, 2],
+            #                          b=temp_region_logprobs[region_ind, 3],
+            #                          mean = temp_mean2_origscale,
+            #                          sd = 1)
 
             # zdraw_temp <- rtruncnorm(n = 1,
             #                          a=temp_region_probs[region_ind, 2],
@@ -11005,11 +11138,34 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
           # CHECK IF THESE BOUNDS ARE CORRECTLY DEFINED
 
+          tempbuffer <- (temp_upper3 - temp_lower3)/100
+
+          if( (temp_upper3 != Inf) & (temp_lower3 != -Inf)){
+            upper_buffered <- temp_upper3 - tempbuffer
+            lower_buffered <- temp_lower3 + tempbuffer
+          }else{
+            upper_buffered <- temp_upper3
+            lower_buffered <- temp_lower3
+            if(temp_upper3 != Inf){
+              upper_buffered <- temp_upper3 - 0.0001
+            }
+            if(temp_lower3 != -Inf){
+              lower_buffered <- temp_lower3 + 0.0001
+            }
+          }
+
+
           zdraw_temp <- rtruncnorm(n = 1,
-                                   a = temp_lower3,
-                                   b = temp_upper3,
+                                   a = lower_buffered,
+                                   b = upper_buffered,
                                    mean = temp_mean2_origscale,
                                    sd = 1)
+
+          # zdraw_temp <- rtruncnorm(n = 1,
+          #                          a = temp_lower3,
+          #                          b = temp_upper3,
+          #                          mean = temp_mean2_origscale,
+          #                          sd = 1)
 
           # zdraw_temp <- rtruncnorm(n = 1,
           #                          a = temp_lower3,
@@ -62012,7 +62168,9 @@ SoftRObart <- function(pair.comp.ten,
   }
   for(i in 1:ncol(X.train)) {
     X.train[,i] <- ecdfs[[i]](X.train[,i])
-    X.test[,i] <- ecdfs[[i]](X.test[,i])
+    if(nrow(X.test)>0){
+      X.test[,i] <- ecdfs[[i]](X.test[,i])
+    }
   }
 
 
