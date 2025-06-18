@@ -1112,7 +1112,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
     s_y_list <- list()
     alpha_s_y_list <- list()
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -1126,7 +1126,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       draw$alpha_s_y_store <- matrix(NA, nrow = iter.max, ncol = n.item)
       draw$var_count_y_store <- array(0, dim =  c( p_y,  iter.max, n.item))
       draw$s_prob_y_store <- array(0, dim = c( p_y,  iter.max, n.item))
-    }
+    # }
 
     #### initialize trees ####
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
@@ -1214,13 +1214,13 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
       # print("sigma = ")
       # print(samplestemp$sigma)
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
     }
 
     if(nrow(df_for_dbart)==n.item){
@@ -2926,13 +2926,13 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
 
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
 
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
 
       if (sparse & (iter > floor(n.burnin * 0.5))) {
         # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
@@ -3180,7 +3180,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
     #   # draw$s_prob_z_store[iter,] <- s_z
     # }
 
-    if(sparse){
+    # if(sparse){
       for(item in 1:n.item){
         draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
         # draw$alpha_s_z_store[iter] <- alpha_s_z
@@ -3189,7 +3189,7 @@ ARRObartNOCovars_partial_ItemTrees <- function(pair.comp.ten,
         draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
         # draw$s_prob_z_store[iter,] <- s_z
       }
-    }
+    # }
 
 
     # draw$mu_test[,1] <- samplestemp$test[,1]
@@ -3673,7 +3673,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
 
     s_y_list <- list()
     alpha_s_y_list <- list()
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -3687,7 +3687,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
       draw$alpha_s_y_store <- matrix(NA, nrow = iter.max, ncol = n.item)
       draw$var_count_y_store <- array(0, dim =  c( p_y,  iter.max, n.item))
       draw$s_prob_y_store <- array(0, dim = c( p_y,  iter.max, n.item))
-    }
+    # }
 
     #### initialize trees ####
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
@@ -3776,13 +3776,13 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
       # print("sigma = ")
       # print(samplestemp$sigma)
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
     }
 
     if(nrow(X.train)==n.item){
@@ -5728,13 +5728,13 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
 
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
 
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
 
       if (sparse & (iter > floor(n.burnin * 0.5))) {
         # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
@@ -6089,7 +6089,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
 
     }
 
-    if(sparse){
+    # if(sparse){
       for(item in 1:n.item){
         draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
         # draw$alpha_s_z_store[iter] <- alpha_s_z
@@ -6098,7 +6098,7 @@ ARRObartWithCovars_partial_ItemTrees <- function(pair.comp.ten,
         draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
         # draw$s_prob_z_store[iter,] <- s_z
       }
-    }
+    # }
 
 
     # if( nrow(X.test) >0 ){
@@ -6612,7 +6612,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
     p_y <- ncol(df_for_dbart) - 1 # subtracting 1. outcome is a column of df_for_dbart
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -6629,7 +6629,7 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -6700,12 +6700,12 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -8525,12 +8525,12 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # mutemp <- sampler$predict(df_for_dbart)
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -8723,14 +8723,14 @@ ARRObartNOCovars_fullcond_partial <- function(pair.comp.ten,
     }
 
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # draw$mu_test[,1] <- samplestemp$test[,1]
 
@@ -8923,7 +8923,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
   length_mu_test <- 1
 
 
-  if(nrow(X.test) >0 ){
+  if(nrow(X.test) > 0 ){
 
 
     if(diff_num_test_rankers==1){
@@ -9245,7 +9245,17 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
 
 
-    # print("Line 799.")
+    if(is.null(colnames(X.train))){
+      colnames(X.train) <- paste0("x",1:ncol(X.train))
+      colnames(X.test) <- paste0("x",1:ncol(X.test))
+    }else{
+      if(!(all(colnames(X.test)==colnames(X.train)))){
+        warning("traning and test column names not equal")
+      }
+      colnames(X.test) <- colnames(X.train)
+    }
+
+    print("Line 9258")
 
     # df_for_dbart <- data.frame(y = as.vector(Z.mat), x = Zlag.mat )
 
@@ -9279,8 +9289,9 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
         )
         #colnames(Xmat.test) <- c("x","z","w")
 
+        # colnames(Xmat.test)
 
-
+        colnames(Xmat.test) <- c(paste0("z",1:ncol(Zlag.mat.test)),colnames(X.test))
 
 
         #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
@@ -9296,6 +9307,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
         if(nrow(X.test)>0 ){
           Xmat.test  <- data.frame(x = cbind( Zlag.mat.test, X.test ) )
 
+          colnames(Xmat.test) <- colnames(Xmat.train)[2:ncol(Xmat.train)]  # c(paste0("z",1:ncol(Zlag.mat.test)),colnames(X.test))
+
           #must create predictions for future time periods using covariates for one period ahead, two periods ahead etc.
 
         }
@@ -9308,7 +9321,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     p_y <- ncol(Xmat.train) - 1 # subtracting 1. Outcome is a column of Xmat.train
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -9325,7 +9338,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -9424,12 +9437,12 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # print("sigma = ")
     # print(samplestemp$sigma)
 
@@ -9502,6 +9515,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
   }
 
 
+  print("Line 9518")
 
   ## store initial value
   #
@@ -9562,7 +9576,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
       # print("colnames(temp_test_mat) = ")
       # print(colnames(temp_test_mat))
 
-      testpredvec <- sampler$predict(temp_test_mat)
+      testpredvec <- sampler$predict(x.test = temp_test_mat)
 
       #fill in temp_test_preds with noise
 
@@ -9670,6 +9684,9 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
   ## Gibbs iteration
   iter <- 2
   breakcount <- 0
+
+  print("Line 9688")
+
 
   while(iter <= iter.max){
     # for(iter in 2:iter.max){
@@ -11192,6 +11209,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
 
     # print("Line 4843")
+    # print("Line 11212")
 
 
     ##################### Old Code for Latent outcome samples ##################################################################
@@ -11618,12 +11636,12 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # mutemp <- sampler$predict(df_for_dbart)
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -11887,6 +11905,8 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
       temp_test_mat <- data.frame(x = temp_test_mat)
       colnames(temp_test_mat) <- colnames(Xmat.test)
 
+      # print("Line 11908")
+
       # temp_test_mat <- Xmat.test[1:(n.item*n.ranker) ,]  #  matrix(NA, nrow = n.item*n.ranker,ncol = ncol(Xmat.test))
 
       temp_test_preds <- matrix(NA, nrow = n.item*n.ranker,ncol = num_test_periods)
@@ -11901,7 +11921,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
       for(t1 in 1:num_test_periods){
         #produce a prediction
-        testpredvec <- sampler$predict(temp_test_mat)
+        testpredvec <- sampler$predict(x.test = temp_test_mat)
 
         #fill in temp_test_preds with noise
         if(noise_in_pred ==1){
@@ -11936,6 +11956,7 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
         }
 
         colnames(temp_test_mat) <- colnames(Xmat.test)
+        # print("Line 11959")
 
 
         #fill in temp_mu_test without noise
@@ -12010,14 +12031,14 @@ ARRObartWithCovars_fullcond_partial <- function(pair.comp.ten,
 
     }
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
 
     # if( nrow(X.test) >0 ){
@@ -17892,11 +17913,11 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
     # s <- rep(1 / p, p) # probability vector to be used during the growing process for DART feature weighting
 
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store <- rep(NA, iter.max)
       draw$var_count_store <- matrix(0, ncol = p, nrow = iter.max)
       draw$s_prob_store <- matrix(0, ncol = p, nrow = iter.max)
-    }
+    # }
 
 
 
@@ -20934,14 +20955,14 @@ ARRObartWithCovars_fullcond_EmpN_partial <- function(pair.comp.ten,
     # if( nrow(X.test) >0 ){
     #   draw$mu_test[,iter] <- samplestemp$test[,1]
     # }
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store[iter] <- alpha_s
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_store[iter,] <- var_count
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_store[iter,] <- s
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -26676,11 +26697,11 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
     # s <- rep(1 / p, p) # probability vector to be used during the growing process for DART feature weighting
 
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store <- rep(NA, iter.max)
       draw$var_count_store <- matrix(0, ncol = p, nrow = iter.max)
       draw$s_prob_store <- matrix(0, ncol = p, nrow = iter.max)
-    }
+    # }
 
 
 
@@ -29648,14 +29669,14 @@ ARRObartWithCovars_fullcond_EmpN_topk <- function(ranks_mat, #pair.comp.ten,
     # if( nrow(X.test) >0 ){
     #   draw$mu_test[,iter] <- samplestemp$test[,1]
     # }
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store[iter] <- alpha_s
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_store[iter,] <- var_count
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_store[iter,] <- s
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -35250,12 +35271,12 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -36846,12 +36867,12 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # mutemp <- sampler$predict(df_for_dbart)
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -37044,14 +37065,14 @@ ARRObartNOCovars_fullcond <- function(pair.comp.ten,
     }
 
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # draw$mu_test[,1] <- samplestemp$test[,1]
 
@@ -37796,11 +37817,11 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
     # s <- rep(1 / p, p) # probability vector to be used during the growing process for DART feature weighting
 
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store <- rep(NA, iter.max)
       draw$var_count_store <- matrix(0, ncol = p, nrow = iter.max)
       draw$s_prob_store <- matrix(0, ncol = p, nrow = iter.max)
-    }
+    # }
 
 
 
@@ -40772,14 +40793,14 @@ ARRObartWithCovars_fullcond_emptynodes <- function(pair.comp.ten,
     # if( nrow(X.test) >0 ){
     #   draw$mu_test[,iter] <- samplestemp$test[,1]
     # }
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_store[iter] <- alpha_s
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_store[iter,] <- var_count
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_store[iter,] <- s
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -41344,7 +41365,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
     p_y <- ncol(Xmat.train) - 1 # subtracting 1. Outcome is a column of Xmat.train
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -41361,7 +41382,7 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
                              keepTrees = TRUE,
@@ -41430,12 +41451,12 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # print("sigma = ")
     # print(samplestemp$sigma)
 
@@ -43474,12 +43495,12 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
     mutemp <- samplestemp$train[,1]
     #suppose there are a number of samples
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
     # mutemp <- sampler$predict(df_for_dbart)
     # print("sigma = ")
     # print(samplestemp$sigma)
@@ -43866,14 +43887,14 @@ ARRObartWithCovars_fullcond <- function(pair.comp.ten,
 
     }
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
 
     # if( nrow(X.test) >0 ){
@@ -58554,7 +58575,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
     s_y_list <- list()
     alpha_s_y_list <- list()
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -58571,7 +58592,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
       draw$alpha_s_y_store <- matrix(NA, nrow = iter.max, ncol = n.item)
       draw$var_count_y_store <- array(0, dim =  c( p_y,  iter.max, n.item))
       draw$s_prob_y_store <- array(0, dim = c( p_y,  iter.max, n.item))
-    }
+    # }
 
 
     #### initialize trees ####
@@ -58668,13 +58689,13 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
 
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
 
 
 
@@ -59011,13 +59032,13 @@ RObart_ItemTrees <- function(pair.comp.ten,
 
       # mupreds <- samplerlist[[item]]$predict(Xmat.train)
 
-      if(sparse){
+      # if(sparse){
         tempcounts <- fcount(samplerlist[[item]]$getTrees()$var)
         tempcounts <- tempcounts[tempcounts$x != -1, ]
         var_count_y <- rep(0, p_y)
         var_count_y[tempcounts$x] <- tempcounts$N
         varcount_list[[item]] <- var_count_y
-      }
+      # }
 
       if (sparse & (iter > floor(n.burnin * 0.5))) {
         # s_update_z <- update_s(var_count_z, p_z, alpha_s_z)
@@ -59582,7 +59603,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
       }
     }
 
-    if(sparse){
+    # if(sparse){
       for(item in 1:n.item){
         draw$alpha_s_y_store[iter,item] <- alpha_s_y_list[[item]]
         # draw$alpha_s_z_store[iter] <- alpha_s_z
@@ -59591,7 +59612,7 @@ RObart_ItemTrees <- function(pair.comp.ten,
         draw$s_prob_y_store[, iter, item] <- s_y_list[[item]]
         # draw$s_prob_z_store[iter,] <- s_z
       }
-    }
+    # }
 
     if(SUR_errors){
       # set various prior parameter values
@@ -59914,7 +59935,7 @@ RObartnp <- function(pair.comp.ten,
 
     p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -59931,7 +59952,7 @@ RObartnp <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
     #### initialize trees ##########
 
@@ -60004,12 +60025,12 @@ RObartnp <- function(pair.comp.ten,
 
     sampler$setResponse(y = tempy)
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
     sampler$setSigma(sigma = 1)
@@ -60025,11 +60046,11 @@ RObartnp <- function(pair.comp.ten,
     #suppose there are a number of samples
 
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
     # print("sigma = ")
@@ -60845,14 +60866,14 @@ RObartnp <- function(pair.comp.ten,
       draw$mu_test[,iter] <- samplestemp$test[,1]
     }
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -61065,7 +61086,7 @@ RObart <- function(pair.comp.ten,
 
     p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -61082,7 +61103,7 @@ RObart <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
 
     control <- dbartsControl(updateState = updateState, verbose = FALSE,  keepTrainingFits = TRUE,
@@ -61156,12 +61177,12 @@ RObart <- function(pair.comp.ten,
 
 
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
 
@@ -61350,12 +61371,12 @@ RObart <- function(pair.comp.ten,
     # print("sigma = ")
     # print(samplestemp$sigma)
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
@@ -61419,14 +61440,14 @@ RObart <- function(pair.comp.ten,
       draw$mu_test[,iter] <- samplestemp$test[,1]
     }
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
@@ -61629,7 +61650,7 @@ RObart_intercepts <- function(pair.comp.ten,
 
     p_y <- ncol(Xmat.train) - 1 # subtracting 1 outcome is a column of Xmat.train
 
-    if(sparse){
+    # if(sparse){
       s_y <- rep(1 / p_y, p_y) # probability vector to be used during the growing process for DART feature weighting
       rho_y <- p_y # For DART
 
@@ -61646,7 +61667,7 @@ RObart_intercepts <- function(pair.comp.ten,
       draw$alpha_s_y_store <- rep(NA, iter.max)
       draw$var_count_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
       draw$s_prob_y_store <- matrix(0, ncol = p_y, nrow = iter.max)
-    }
+    # }
 
     ####### initilialize trees  ###########
 
@@ -61716,12 +61737,12 @@ RObart_intercepts <- function(pair.comp.ten,
 
 
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
 
 
@@ -61953,12 +61974,12 @@ RObart_intercepts <- function(pair.comp.ten,
     # print("sigma = ")
     # print(samplestemp$sigma)
 
-    if(sparse){
+    # if(sparse){
       tempcounts <- fcount(sampler$getTrees()$var)
       tempcounts <- tempcounts[tempcounts$x != -1, ]
       var_count_y <- rep(0, p_y)
       var_count_y[tempcounts$x] <- tempcounts$N
-    }
+    # }
 
     if(nrow(X.train)==n.item){
       #each n.ranker values of u should be equal,
@@ -62015,14 +62036,14 @@ RObart_intercepts <- function(pair.comp.ten,
 
     }
 
-    if(sparse){
+    # if(sparse){
       draw$alpha_s_y_store[iter] <- alpha_s_y
       # draw$alpha_s_z_store[iter] <- alpha_s_z
       draw$var_count_y_store[iter,] <- var_count_y
       # draw$var_count_z_store[iter,] <- var_count_z
       draw$s_prob_y_store[iter,] <- s_y
       # draw$s_prob_z_store[iter,] <- s_z
-    }
+    # }
 
     # print iteration number
     if(iter %% print.opt == 0){
